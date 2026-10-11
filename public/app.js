@@ -61,3 +61,11 @@ export function escapeHtml(str) {
 }
 
 updateCartCount();
+
+// Product photo if there is one, otherwise the emoji on a colored tile.
+export function thumb(p) {
+  const bg = /^#[0-9a-fA-F]{6}$/.test(p.color) ? p.color : "#eef0f4";
+  return p.image_url
+    ? `<div class="thumb has-img" style="background:${bg}"><img src="${escapeHtml(p.image_url)}" alt="${escapeHtml(p.name)}" loading="lazy" decoding="async" /></div>`
+    : `<div class="thumb" style="background:${bg}" aria-hidden="true">${escapeHtml(p.emoji)}</div>`;
+}

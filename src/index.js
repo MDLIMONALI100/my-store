@@ -23,6 +23,7 @@ export default {
         return withHeaders(res, { "Cache-Control": "no-store", "X-Robots-Tag": "noindex" });
       }
 
+      if (path.startsWith("/images/") && request.method === "GET") return await serveImage(request, env, path);
       if (path.startsWith("/api/")) return await handlePublicApi(request, env, url, path);
     } catch (err) {
       console.error(err);
@@ -39,15 +40,15 @@ async function handlePublicApi(request, env, url, path) {
   if (path === "/api/products" && request.method === "GET") {
     const category = url.searchParams.get("category");
     const stmt = category
-      ? env.DB.prepare(`SELECT ${PRODUCT_COLS} FROM products WHERE category = ? ORDER BY sort_order`).bind(category)
-      : env.DB.prepare(`SELECT ${PRODUCT_COLS} FROM products ORDER BY sort_order`);
+      ? env.DB.prepare(`SELECT ${PRODUCT_COLS} FROM products WHERE hidden = 0 AND category = ? ORDER BY sort_order`).bind(category)
+      : env.DB.prepare(`SELECT ${PRODUCT_COLS} FROM products WHERE hidden = 0 ORDER BY sort_order`);
     const { results } = await stmt.all();
     return json({ products: results });
   }
 
   const match = path.match(/^\/api\/products\/([a-z0-9-]+)$/);
   if (match && request.method === "GET") {
-    const product = await env.DB.prepare(`SELECT ${PRODUCT_COLS} FROM products WHERE id = ?`).bind(match[1]).first();
+    const product = await env.DB.prepare(`SELECT ${PRODUCT_COLS} FROM products WHERE id = ? AND hidden = 0`).bind(match[1]).first();
     return product ? json({ product }) : json({ error: "Product not found" }, 404);
   }
 
@@ -58,7 +59,32 @@ async function handlePublicApi(request, env, url, path) {
   return json({ error: "Not found" }, 404);
 }
 
-const PRODUCT_COLS = "id, name, category, price, emoji, color, description, stock";
+const PRODUCT_COLS = `id, name, category, price, emoji, color, description, stock,
+  CASE WHEN image_id IS NULL THEN NULL ELSE '/images/' || image_id END AS image_url`;
+
+// Image IDs are random and never reused (a new upload gets a new ID), so
+// browsers and Cloudflare's edge can cache them forever. Edge hits skip D1.
+async function serveImage(request, env, path) {
+  const id = path.slice("/images/".length);
+  if (!/^[a-f0-9]{32}$/.test(id)) return new Response("Not found", { status: 404 });
+
+  const cache = caches.default;
+  const cached = await cache.match(request);
+  if (cached) return cached;
+
+  const row = await env.DB.prepare(`SELECT content_type, data FROM images WHERE id = ?`).bind(id).first();
+  if (!row) return new Response("Not found", { status: 404 });
+
+  const res = new Response(new Uint8Array(row.data), {
+    headers: {
+      "Content-Type": row.content_type,
+      "Cache-Control": "public, max-age=31536000, immutable",
+      "X-Content-Type-Options": "nosniff",
+    },
+  });
+  await cache.put(request, res.clone());
+  return res;
+}
 
 async function checkout(request, env) {
   let body;
@@ -85,7 +111,7 @@ async function checkout(request, env) {
   // Prices always come from the database, never from the browser.
   const ids = [...qtyById.keys()];
   const { results: rows } = await env.DB.prepare(
-    `SELECT id, name, price, stock FROM products WHERE id IN (${ids.map(() => "?").join(",")})`
+    `SELECT id, name, price, stock FROM products WHERE hidden = 0 AND id IN (${ids.map(() => "?").join(",")})`
   )
     .bind(...ids)
     .all();
@@ -202,6 +228,10 @@ async function safeEqual(a, b) {
 }
 
 async function handleAdminApi(request, env, path) {
+  if (path.startsWith("/api/admin/products") || path === "/api/admin/images") {
+    return handleAdminProducts(request, env, path);
+  }
+
   if (path === "/api/admin/orders" && request.method === "GET") {
     const status = new URL(request.url).searchParams.get("status");
     const where = STATUSES.includes(status) ? "WHERE o.status = ?" : "";
@@ -267,6 +297,141 @@ async function handleAdminApi(request, env, path) {
   }
 
   return json({ error: "Not found" }, 404);
+}
+
+// ---------- Admin: products & images ----------
+
+const IMAGE_TYPES = ["image/webp", "image/jpeg", "image/png"];
+const MAX_IMAGE_BYTES = 1_500_000; // D1 rows max out at 2 MB
+const ADMIN_PRODUCT_COLS = `${PRODUCT_COLS}, hidden, image_id, sort_order`;
+
+async function handleAdminProducts(request, env, path) {
+  if (path === "/api/admin/images" && request.method === "POST") {
+    const type = (request.headers.get("Content-Type") || "").split(";")[0].trim();
+    if (!IMAGE_TYPES.includes(type)) return json({ error: "Images must be WebP, JPEG or PNG" }, 415);
+    const data = await request.arrayBuffer();
+    if (data.byteLength === 0) return json({ error: "Empty image" }, 400);
+    if (data.byteLength > MAX_IMAGE_BYTES) return json({ error: "Image is too large (max 1.5 MB after resizing)" }, 413);
+
+    const id = crypto.randomUUID().replace(/-/g, "");
+    await env.DB.prepare(`INSERT INTO images (id, content_type, size, data) VALUES (?, ?, ?, ?)`)
+      .bind(id, type, data.byteLength, data)
+      .run();
+    return json({ imageId: id, url: `/images/${id}` }, 201);
+  }
+
+  if (path === "/api/admin/products" && request.method === "GET") {
+    const { results } = await env.DB.prepare(`SELECT ${ADMIN_PRODUCT_COLS} FROM products ORDER BY sort_order`).all();
+    return json({ products: results });
+  }
+
+  if (path === "/api/admin/products" && request.method === "POST") {
+    const input = await readJson(request);
+    const product = await validateProduct(env, input);
+    if (product.error) return json({ error: product.error }, 400);
+    const p = product.value;
+
+    const id = await uniqueSlug(env, p.name);
+    await env.DB.prepare(
+      `INSERT INTO products (id, name, category, price, emoji, color, description, stock, image_id, hidden, sort_order, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM products), strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))`
+    )
+      .bind(id, p.name, p.category, p.price, p.emoji, p.color, p.description, p.stock, p.imageId, p.hidden)
+      .run();
+    return json({ product: await getAdminProduct(env, id) }, 201);
+  }
+
+  const match = path.match(/^\/api\/admin\/products\/([a-z0-9-]+)$/);
+  if (!match) return json({ error: "Not found" }, 404);
+  const id = match[1];
+  const existing = await env.DB.prepare(`SELECT id, image_id FROM products WHERE id = ?`).bind(id).first();
+  if (!existing) return json({ error: "Product not found" }, 404);
+
+  if (request.method === "GET") {
+    return json({ product: await getAdminProduct(env, id) });
+  }
+
+  if (request.method === "PUT") {
+    const input = await readJson(request);
+    const product = await validateProduct(env, input);
+    if (product.error) return json({ error: product.error }, 400);
+    const p = product.value;
+
+    const statements = [
+      env.DB.prepare(
+        `UPDATE products SET name = ?, category = ?, price = ?, emoji = ?, color = ?, description = ?, stock = ?,
+                image_id = ?, hidden = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
+         WHERE id = ?`
+      ).bind(p.name, p.category, p.price, p.emoji, p.color, p.description, p.stock, p.imageId, p.hidden, id),
+    ];
+    // Remove the old photo when it's replaced or removed.
+    if (existing.image_id && existing.image_id !== p.imageId) {
+      statements.push(env.DB.prepare(`DELETE FROM images WHERE id = ?`).bind(existing.image_id));
+    }
+    await env.DB.batch(statements);
+    return json({ product: await getAdminProduct(env, id) });
+  }
+
+  if (request.method === "DELETE") {
+    // Past orders keep their own copy of the name and price, so they stay intact.
+    const statements = [env.DB.prepare(`DELETE FROM products WHERE id = ?`).bind(id)];
+    if (existing.image_id) statements.push(env.DB.prepare(`DELETE FROM images WHERE id = ?`).bind(existing.image_id));
+    await env.DB.batch(statements);
+    return json({ deleted: id });
+  }
+
+  return json({ error: "Not found" }, 404);
+}
+
+async function validateProduct(env, input) {
+  const str = (key, max) => (typeof input?.[key] === "string" ? input[key].trim().slice(0, max) : "");
+  const name = str("name", 100);
+  const category = str("category", 50);
+  const description = str("description", 2000);
+  const emoji = str("emoji", 16) || "🛍️";
+  const color = /^#[0-9a-fA-F]{6}$/.test(input?.color) ? input.color : "#eef0f4";
+  const price = Number(input?.price);
+  const stock = Number(input?.stock);
+  const imageId = input?.imageId ? String(input.imageId) : null;
+
+  if (name.length < 2) return { error: "Name must be at least 2 characters" };
+  if (!category) return { error: "Please enter a category" };
+  if (!Number.isInteger(price) || price < 0 || price > 100_000_000) return { error: "Please enter a valid price" };
+  if (!Number.isInteger(stock) || stock < 0 || stock > 1_000_000) return { error: "Stock must be a whole number, 0 or more" };
+  if (imageId) {
+    if (!/^[a-f0-9]{32}$/.test(imageId)) return { error: "Invalid image" };
+    const img = await env.DB.prepare(`SELECT id FROM images WHERE id = ?`).bind(imageId).first();
+    if (!img) return { error: "Image not found. Please upload it again." };
+  }
+
+  return { value: { name, category, description, emoji, color, price, stock, imageId, hidden: input?.hidden ? 1 : 0 } };
+}
+
+// "Classic Tee" -> "classic-tee", or "classic-tee-2" if that's taken.
+async function uniqueSlug(env, name) {
+  const base =
+    name
+      .toLowerCase()
+      .normalize("NFKD")
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 60) || "product";
+  const { results } = await env.DB.prepare(`SELECT id FROM products WHERE id = ? OR id LIKE ?`).bind(base, `${base}-%`).all();
+  const taken = new Set(results.map((r) => r.id));
+  if (!taken.has(base)) return base;
+  for (let n = 2; ; n++) if (!taken.has(`${base}-${n}`)) return `${base}-${n}`;
+}
+
+async function getAdminProduct(env, id) {
+  return env.DB.prepare(`SELECT ${ADMIN_PRODUCT_COLS} FROM products WHERE id = ?`).bind(id).first();
+}
+
+async function readJson(request) {
+  try {
+    return await request.json();
+  } catch {
+    return null;
+  }
 }
 
 async function getOrder(env, id) {

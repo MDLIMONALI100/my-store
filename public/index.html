@@ -33,7 +33,7 @@
     </footer>
 
     <script type="module">
-      import { api, formatPrice, addToCart, toast, escapeHtml } from "/app.js";
+      import { api, formatPrice, addToCart, toast, escapeHtml, thumb } from "/app.js";
 
       const grid = document.getElementById("grid");
       const filters = document.getElementById("filters");
@@ -47,7 +47,7 @@
             (p) => `
           <article class="card">
             <a href="/product?id=${p.id}">
-              <div class="thumb" style="background:${p.color}" aria-hidden="true">${p.emoji}</div>
+              ${thumb(p)}
             </a>
             <div class="card-body">
               <span class="category">${escapeHtml(p.category)}</span>
@@ -67,7 +67,7 @@
       function renderFilters() {
         const cats = ["All", ...new Set(all.map((p) => p.category))];
         filters.innerHTML = cats
-          .map((c) => `<button class="chip" aria-pressed="${c === active}" data-cat="${c}">${c}</button>`)
+          .map((c) => `<button class="chip" aria-pressed="${c === active}" data-cat="${escapeHtml(c)}">${escapeHtml(c)}</button>`)
           .join("");
       }
 

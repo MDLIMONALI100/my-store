@@ -1,0 +1,313 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>Products · My Store Admin</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="container">
+        <a href="/admin" class="logo">My Store · Admin</a>
+        <nav class="nav">
+          <a href="/admin/">Orders</a>
+          <a href="/admin/products" class="active">Products</a>
+          <a href="/" target="_blank" rel="noopener">View store ↗</a>
+        </nav>
+      </div>
+    </header>
+
+    <main class="container">
+      <div class="admin-bar">
+        <h1>Products</h1>
+        <div style="display:flex;gap:8px">
+          <input type="search" id="search" class="search" placeholder="Search products…" aria-label="Search products" />
+          <button class="btn" id="new">+ Add product</button>
+        </div>
+      </div>
+
+      <div class="admin-layout">
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th></th>
+                <th>Product</th>
+                <th>Category</th>
+                <th class="num">Price</th>
+                <th class="num">Stock</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="rows"><tr><td colspan="6" class="message">Loading…</td></tr></tbody>
+          </table>
+        </div>
+
+        <aside class="detail" id="panel">
+          <p class="hint">Select a product to edit it, or click <strong>+ Add product</strong>.</p>
+        </aside>
+      </div>
+    </main>
+
+    <datalist id="categories"></datalist>
+
+    <script type="module">
+      import { api, formatPrice, toast, escapeHtml, thumb } from "/app.js";
+
+      const rowsEl = document.getElementById("rows");
+      const panel = document.getElementById("panel");
+      const searchEl = document.getElementById("search");
+      const MAX_SIDE = 1200;
+      let products = [];
+      let editing = null; // product being edited, or {} for a new one
+      let pendingImage = null; // { blob, url } waiting to be uploaded
+      let removeImage = false;
+
+      async function load() {
+        try {
+          ({ products } = await api("/api/admin/products"));
+          document.getElementById("categories").innerHTML = [...new Set(products.map((p) => p.category))]
+            .map((c) => `<option value="${escapeHtml(c)}"></option>`)
+            .join("");
+          renderRows();
+        } catch (err) {
+          rowsEl.innerHTML = `<tr><td colspan="6" class="message error">${escapeHtml(err.message)}</td></tr>`;
+        }
+      }
+
+      function renderRows() {
+        const q = searchEl.value.trim().toLowerCase();
+        const list = q ? products.filter((p) => `${p.name} ${p.category}`.toLowerCase().includes(q)) : products;
+        rowsEl.innerHTML = list.length
+          ? list
+              .map(
+                (p) => `
+            <tr data-id="${p.id}" aria-selected="${editing?.id === p.id}" tabindex="0">
+              <td class="mini-thumb">${thumb(p)}</td>
+              <td><strong>${escapeHtml(p.name)}</strong></td>
+              <td>${escapeHtml(p.category)}</td>
+              <td class="num">${formatPrice(p.price)}</td>
+              <td class="num" ${p.stock === 0 ? 'style="color:var(--danger)"' : ""}>${p.stock}</td>
+              <td><span class="badge ${p.hidden ? "cancelled" : "shipped"}">${p.hidden ? "Hidden" : "Visible"}</span></td>
+            </tr>`
+              )
+              .join("")
+          : `<tr><td colspan="6" class="message">${q ? "No matching products." : "No products yet. Click + Add product."}</td></tr>`;
+      }
+
+      function openEditor(p) {
+        editing = p;
+        pendingImage = null;
+        removeImage = false;
+        renderRows();
+        const isNew = !p.id;
+        panel.innerHTML = `
+          <h2>${isNew ? "Add product" : "Edit product"}</h2>
+          <form id="product-form" class="product-form" novalidate>
+            <div class="field">
+              <span class="label">Photo</span>
+              <div class="image-picker">
+                <div id="preview">${previewHtml()}</div>
+                <div class="image-actions">
+                  <label class="btn btn-secondary" for="file">${p.image_url ? "Change photo" : "Upload photo"}</label>
+                  <input type="file" id="file" accept="image/*" hidden />
+                  <button type="button" class="btn btn-ghost" id="remove-image" ${p.image_url ? "" : "hidden"}>Remove</button>
+                </div>
+                <p class="hint">JPG, PNG or WebP. Large photos are shrunk automatically.</p>
+              </div>
+            </div>
+            <div class="field">
+              <label for="f-name">Name</label>
+              <input id="f-name" name="name" required maxlength="100" value="${escapeHtml(p.name || "")}" />
+            </div>
+            <div class="field-row">
+              <div class="field">
+                <label for="f-category">Category</label>
+                <input id="f-category" name="category" list="categories" required maxlength="50" value="${escapeHtml(p.category || "")}" />
+              </div>
+              <div class="field">
+                <label for="f-price">Price ($)</label>
+                <input id="f-price" name="price" type="number" min="0" step="0.01" required value="${p.price != null ? (p.price / 100).toFixed(2) : ""}" />
+              </div>
+              <div class="field">
+                <label for="f-stock">Stock</label>
+                <input id="f-stock" name="stock" type="number" min="0" step="1" required value="${p.stock ?? 0}" />
+              </div>
+            </div>
+            <div class="field">
+              <label for="f-description">Description</label>
+              <textarea id="f-description" name="description" rows="4" maxlength="2000">${escapeHtml(p.description || "")}</textarea>
+            </div>
+            <div class="field-row">
+              <div class="field">
+                <label for="f-emoji">Emoji <span class="optional">(shown if no photo)</span></label>
+                <input id="f-emoji" name="emoji" maxlength="16" value="${escapeHtml(p.emoji || "🛍️")}" />
+              </div>
+              <div class="field">
+                <label for="f-color">Tile color</label>
+                <input id="f-color" name="color" type="color" value="${escapeHtml(p.color || "#eef0f4")}" />
+              </div>
+            </div>
+            <label class="check">
+              <input type="checkbox" name="hidden" ${p.hidden ? "checked" : ""} />
+              Hide from shop <span class="optional">(keeps the product but customers can't see or buy it)</span>
+            </label>
+            <p class="form-error" id="form-error" role="alert"></p>
+            <div class="actions">
+              <button type="submit" class="btn btn-lg" id="save">${isNew ? "Add product" : "Save changes"}</button>
+              <button type="button" class="btn btn-secondary btn-lg" id="cancel">Cancel</button>
+              ${isNew ? "" : `<button type="button" class="btn btn-danger btn-lg" id="delete" style="margin-left:auto">Delete</button>`}
+            </div>
+          </form>`;
+        panel.querySelector("#f-name").focus();
+      }
+
+      function previewHtml() {
+        const src = pendingImage?.url || (!removeImage && editing?.image_url);
+        return src
+          ? `<img class="preview-img" src="${escapeHtml(src)}" alt="Product photo preview" />`
+          : `<div class="preview-empty">No photo</div>`;
+      }
+
+      // Shrink to at most 1200px on the longest side and re-encode, so
+      // uploads stay small and fast. Falls back to JPEG where WebP isn't supported.
+      async function resizeImage(file) {
+        let bitmap;
+        try {
+          bitmap = await createImageBitmap(file);
+        } catch {
+          throw new Error("This image format isn't supported. Please use JPG, PNG or WebP.");
+        }
+        const scale = Math.min(1, MAX_SIDE / Math.max(bitmap.width, bitmap.height));
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.round(bitmap.width * scale);
+        canvas.height = Math.round(bitmap.height * scale);
+        const ctx = canvas.getContext("2d");
+        ctx.fillStyle = "#fff"; // transparent PNGs get a white background in JPEG
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+        const toBlob = (type, q) => new Promise((r) => canvas.toBlob(r, type, q));
+        let blob = await toBlob("image/webp", 0.82);
+        if (!blob || blob.type !== "image/webp") blob = await toBlob("image/jpeg", 0.85);
+        return blob;
+      }
+
+      panel.addEventListener("change", async (e) => {
+        if (e.target.id !== "file") return;
+        const file = e.target.files[0];
+        e.target.value = "";
+        if (!file) return;
+        const errorEl = document.getElementById("form-error");
+        errorEl.textContent = "";
+        try {
+          const blob = await resizeImage(file);
+          if (pendingImage) URL.revokeObjectURL(pendingImage.url);
+          pendingImage = { blob, url: URL.createObjectURL(blob) };
+          removeImage = false;
+          document.getElementById("preview").innerHTML = previewHtml();
+          document.getElementById("remove-image").hidden = false;
+          panel.querySelector('label[for="file"]').textContent = "Change photo";
+        } catch (err) {
+          errorEl.textContent = err.message;
+        }
+      });
+
+      panel.addEventListener("click", async (e) => {
+        if (e.target.id === "remove-image") {
+          pendingImage = null;
+          removeImage = true;
+          document.getElementById("preview").innerHTML = previewHtml();
+          e.target.hidden = true;
+        }
+        if (e.target.id === "cancel") {
+          editing = null;
+          renderRows();
+          panel.innerHTML = `<p class="hint">Select a product to edit it, or click <strong>+ Add product</strong>.</p>`;
+        }
+        if (e.target.id === "delete") {
+          if (!confirm(`Delete "${editing.name}"? This can't be undone. Past orders keep their details.`)) return;
+          try {
+            await api(`/api/admin/products/${editing.id}`, { method: "DELETE" });
+            toast(`${editing.name} deleted`);
+            editing = null;
+            panel.innerHTML = `<p class="hint">Product deleted.</p>`;
+            load();
+          } catch (err) {
+            document.getElementById("form-error").textContent = err.message;
+          }
+        }
+      });
+
+      panel.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const form = e.target;
+        const errorEl = document.getElementById("form-error");
+        const saveBtn = document.getElementById("save");
+        errorEl.textContent = "";
+
+        const invalid = [...form.elements].find((el) => el.willValidate && !el.checkValidity());
+        if (invalid) {
+          invalid.focus();
+          errorEl.textContent = `Please check: ${form.querySelector(`label[for="${invalid.id}"]`)?.firstChild.textContent.trim() || "this field"}`;
+          return;
+        }
+
+        const data = Object.fromEntries(new FormData(form));
+        const label = saveBtn.textContent;
+        saveBtn.disabled = true;
+        try {
+          let imageId = removeImage ? null : editing.image_id || null;
+          if (pendingImage) {
+            saveBtn.textContent = "Uploading photo…";
+            const res = await api("/api/admin/images", {
+              method: "POST",
+              headers: { "Content-Type": pendingImage.blob.type },
+              body: pendingImage.blob,
+            });
+            imageId = res.imageId;
+          }
+          saveBtn.textContent = "Saving…";
+          const body = JSON.stringify({
+            name: data.name,
+            category: data.category,
+            price: Math.round(parseFloat(data.price) * 100),
+            stock: parseInt(data.stock, 10),
+            description: data.description,
+            emoji: data.emoji,
+            color: data.color,
+            hidden: form.elements.hidden.checked,
+            imageId,
+          });
+          const { product } = editing.id
+            ? await api(`/api/admin/products/${editing.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body })
+            : await api("/api/admin/products", { method: "POST", headers: { "Content-Type": "application/json" }, body });
+          toast(editing.id ? "Changes saved" : `${product.name} added`);
+          await load();
+          openEditor(product);
+        } catch (err) {
+          errorEl.textContent = err.message;
+          saveBtn.disabled = false;
+          saveBtn.textContent = label;
+        }
+      });
+
+      rowsEl.addEventListener("click", (e) => {
+        const tr = e.target.closest("tr[data-id]");
+        if (tr) openEditor(products.find((p) => p.id === tr.dataset.id));
+      });
+      rowsEl.addEventListener("keydown", (e) => {
+        const tr = e.target.closest("tr[data-id]");
+        if (tr && (e.key === "Enter" || e.key === " ")) {
+          e.preventDefault();
+          openEditor(products.find((p) => p.id === tr.dataset.id));
+        }
+      });
+      document.getElementById("new").addEventListener("click", () => openEditor({}));
+      searchEl.addEventListener("input", renderRows);
+
+      load();
+    </script>
+  </body>
+</html>
