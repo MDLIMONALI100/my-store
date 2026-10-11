@@ -1,3 +1,5 @@
+import { sanitize, buildCss, fontsUrl, settingsScript } from "../public/theme.js";
+
 const SHIPPING_FLAT = 500;
 const FREE_SHIPPING_OVER = 5000;
 const MAX_QTY = 10;
@@ -30,9 +32,67 @@ export default {
       return json({ error: "Something went wrong. Please try again." }, 500);
     }
 
-    return env.ASSETS.fetch(request);
+    const res = await env.ASSETS.fetch(request);
+    if (request.method === "GET" && (res.headers.get("Content-Type") || "").includes("text/html")) {
+      try {
+        return applySettings(res, await getSettings(env));
+      } catch (err) {
+        console.error("settings", err); // never let a settings problem take the shop down
+      }
+    }
+    return res;
   },
 };
+
+// ---------- Design settings ----------
+
+// Settings are read on every storefront page view. A short per-instance
+// cache keeps that to one tiny D1 read every few seconds at most.
+let settingsCache = { value: null, at: 0 };
+const SETTINGS_TTL_MS = 5000;
+
+async function getSettings(env) {
+  if (settingsCache.value && Date.now() - settingsCache.at < SETTINGS_TTL_MS) return settingsCache.value;
+  const row = await env.DB.prepare(`SELECT value FROM settings WHERE key = 'site'`).first();
+  let stored = null;
+  try {
+    stored = row ? JSON.parse(row.value) : null;
+  } catch {}
+  settingsCache = { value: sanitize(stored), at: Date.now() };
+  return settingsCache.value;
+}
+
+// Styles the page on the server, so visitors never see the default look flash first.
+function applySettings(res, site) {
+  return new HTMLRewriter()
+    .on("head", {
+      element(el) {
+        el.append(`<style id="site-settings">${buildCss(site)}</style><script>${settingsScript(site)}</script>`, { html: true });
+      },
+    })
+    .on("link#font-link", {
+      element(el) {
+        el.setAttribute("href", fontsUrl(site));
+      },
+    })
+    .on("[data-setting]", {
+      element(el) {
+        const key = el.getAttribute("data-setting");
+        if (typeof site[key] === "string") el.setInnerContent(site[key]); // plain text, never HTML
+      },
+    })
+    .on("[data-section]", {
+      element(el) {
+        if (site[el.getAttribute("data-section")] === false) el.remove();
+      },
+    })
+    .on("title", {
+      text(t) {
+        if (t.text.includes("Streetwear")) t.replace(t.text.replaceAll("Streetwear", site.store_name));
+      },
+    })
+    .transform(res);
+}
 
 // ---------- Public API ----------
 
@@ -244,6 +304,23 @@ async function safeEqual(a, b) {
 }
 
 async function handleAdminApi(request, env, path) {
+  if (path === "/api/admin/settings") {
+    if (request.method === "GET") return json({ settings: await getSettings(env) });
+    if (request.method === "PUT") {
+      const input = await readJson(request);
+      if (!input || typeof input !== "object") return json({ error: "Invalid settings" }, 400);
+      const site = sanitize(input);
+      await env.DB.prepare(
+        `INSERT INTO settings (key, value) VALUES ('site', ?)
+         ON CONFLICT (key) DO UPDATE SET value = excluded.value, updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')`
+      )
+        .bind(JSON.stringify(site))
+        .run();
+      settingsCache = { value: site, at: Date.now() };
+      return json({ settings: site });
+    }
+  }
+
   if (path.startsWith("/api/admin/products") || path === "/api/admin/images") {
     return handleAdminProducts(request, env, path);
   }

@@ -7,7 +7,7 @@
     <meta name="description" content="Leather jackets with attitude. Biker, bomber, café racer and suede styles." />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link id="font-link" href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="/styles.css" />
     <link rel="preload" as="image" href="/img/hero.webp" />
   </head>
@@ -17,17 +17,17 @@
     <main>
       <section class="hero" data-home style="background-image:url('/img/hero.webp')">
         <div class="container hero-content">
-          <span class="eyebrow">New drop · Leather season</span>
-          <h1>Wear it<br /><span class="outline">loud.</span></h1>
-          <p>Biker, bomber, café racer and suede. Leather jackets cut for the street and built to be worn in.</p>
+          <span class="eyebrow" data-setting="hero_eyebrow">New drop · Leather season</span>
+          <h1><span data-setting="hero_line1">Wear it</span><br /><span class="outline" data-setting="hero_line2">loud.</span></h1>
+          <p data-setting="hero_text">Biker, bomber, café racer and suede. Leather jackets cut for the street and built to be worn in.</p>
           <div class="hero-actions">
-            <a href="#shop" class="btn btn-lg">Shop the drop</a>
+            <a href="#shop" class="btn btn-lg" data-setting="hero_button">Shop the drop</a>
             <a href="/?category=Biker" class="btn btn-lg btn-outline">Biker jackets</a>
           </div>
         </div>
       </section>
 
-      <section class="section container" data-home>
+      <section class="section container" data-home data-section="show_categories">
         <div class="section-head">
           <div>
             <h2>Shop by style</h2>
@@ -45,7 +45,7 @@
       <section class="section container" id="shop">
         <div class="section-head">
           <div>
-            <h2 id="shop-title">The drop</h2>
+            <h2 id="shop-title" data-setting="shop_title">The drop</h2>
             <p id="shop-sub">Every jacket, every style.</p>
           </div>
           <a href="/" class="link-arrow" id="shop-all" hidden>← All jackets</a>
@@ -54,7 +54,7 @@
         <div class="grid" id="grid"><p class="message">Loading jackets…</p></div>
       </section>
 
-      <section class="split" data-home>
+      <section class="split" data-home data-section="show_editorial">
         <div class="split-img" style="background-image:url('/img/editorial.webp')" role="img" aria-label="Shearling-lined leather jackets on a brick wall"></div>
         <div class="split-text">
           <span class="eyebrow">The aviator edit</span>
@@ -64,7 +64,7 @@
         </div>
       </section>
 
-      <section class="container" data-home>
+      <section class="container" data-home data-section="show_features">
         <div class="features">
           <div class="feature"><strong>Free shipping</strong><span>On every order over $50.</span></div>
           <div class="feature"><strong>Pick your size</strong><span>XS to XXL across most styles.</span></div>
@@ -76,7 +76,7 @@
     <div data-site-footer></div>
 
     <script type="module">
-      import { api, formatPrice, escapeHtml, thumb, parseSizes } from "/app.js";
+      import { api, formatPrice, escapeHtml, thumb, parseSizes, STORE_NAME, SITE } from "/app.js";
 
       const grid = document.getElementById("grid");
       const filters = document.getElementById("filters");
@@ -101,10 +101,10 @@
 
       function render() {
         const list = active === "All" ? all : all.filter((p) => p.category === active);
-        document.getElementById("shop-title").textContent = active === "All" ? "The drop" : active;
+        document.getElementById("shop-title").textContent = active === "All" ? SITE.shop_title : active;
         document.getElementById("shop-sub").textContent = `${list.length} jacket${list.length === 1 ? "" : "s"}`;
         document.getElementById("shop-all").hidden = active === "All";
-        document.title = active === "All" ? "Streetwear · Leather Jackets" : `${active} Jackets · Streetwear`;
+        document.title = active === "All" ? `${STORE_NAME} · Leather Jackets` : `${active} Jackets · ${STORE_NAME}`;
 
         grid.innerHTML = list.length
           ? list

@@ -39,6 +39,8 @@ h1, h2, h3, .display {
 }
 
 .container { max-width: 1320px; margin: 0 auto; padding: 0 20px; }
+[data-site-header], [data-site-footer] { display: contents; }
+[hidden] { display: none !important; }
 .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
 /* ---------- Marquee ---------- */
@@ -50,7 +52,7 @@ h1, h2, h3, .display {
 /* ---------- Header ---------- */
 .site-header {
   position: sticky; top: 0; z-index: 30;
-  background: rgba(11, 11, 11, 0.88);
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
   backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--border);
 }
@@ -77,10 +79,10 @@ h1, h2, h3, .display {
   overflow: hidden; isolation: isolate;
 }
 .hero::after { content: ""; position: absolute; inset: 0; z-index: -1; background: linear-gradient(180deg, rgba(0,0,0,.15) 0%, rgba(0,0,0,.35) 45%, rgba(0,0,0,.92) 100%); }
-.hero-content { padding-bottom: 64px; width: 100%; }
+.hero-content { padding-bottom: 64px; width: 100%; color: #f5f5f0; }
 .eyebrow { display: inline-block; background: var(--accent); color: var(--on-accent); font-weight: 800; font-size: 0.75rem; letter-spacing: 0.12em; text-transform: uppercase; padding: 4px 10px; margin-bottom: 18px; }
 .hero h1 { font-size: clamp(4rem, 14vw, 12rem); margin: 0; }
-.hero h1 .outline { color: transparent; -webkit-text-stroke: 2px var(--text); }
+.hero h1 .outline { color: transparent; -webkit-text-stroke: 2px #f5f5f0; }
 .hero p { max-width: 460px; color: #d6d6cf; font-size: 1.05rem; margin: 18px 0 28px; }
 .hero-actions { display: flex; gap: 12px; flex-wrap: wrap; }
 
@@ -97,7 +99,7 @@ h1, h2, h3, .display {
 .cat-tile img { width: 100%; height: 100%; object-fit: cover; transition: transform .5s ease; }
 .cat-tile:hover img { transform: scale(1.05); }
 .cat-tile::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, transparent 50%, rgba(0,0,0,.85)); }
-.cat-tile span { position: absolute; left: 16px; bottom: 14px; z-index: 1; font-family: var(--display); font-size: clamp(1.8rem, 3vw, 2.6rem); text-transform: uppercase; line-height: 1; }
+.cat-tile span { color: #f5f5f0; position: absolute; left: 16px; bottom: 14px; z-index: 1; font-family: var(--display); font-size: clamp(1.8rem, 3vw, 2.6rem); text-transform: uppercase; line-height: 1; }
 .cat-tile span small { display: block; font-family: var(--body); font-size: 0.75rem; font-weight: 700; letter-spacing: 0.1em; color: var(--accent); margin-top: 6px; }
 
 /* Filters */
@@ -173,7 +175,7 @@ h1, h2, h3, .display {
 .product-info { position: sticky; top: 100px; }
 .product h1 { font-size: clamp(2.6rem, 5vw, 4.4rem); margin: 8px 0 14px; }
 .product .price { font-size: 1.6rem; }
-.product .desc { color: #cfcfc8; margin: 18px 0; }
+.product .desc { color: color-mix(in srgb, var(--text) 82%, var(--bg)); margin: 18px 0; }
 .stock { font-size: 0.85rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; }
 .stock.in { color: var(--success); }
 .stock.low { color: var(--accent); }
@@ -259,7 +261,7 @@ h1, h2, h3, .display {
 .footer-grid a, .footer-grid span { display: block; padding: 3px 0; }
 .footer-grid a:hover { color: var(--accent); }
 .footer-note p { margin: 0; max-width: 340px; }
-.footer-wordmark { font-family: var(--display); font-size: clamp(4rem, 17vw, 15rem); line-height: 0.85; color: var(--surface-2); margin: 40px 0 16px; letter-spacing: 0.01em; user-select: none; overflow: hidden; white-space: nowrap; }
+.footer-wordmark { text-transform: uppercase; font-family: var(--display); font-size: clamp(4rem, 17vw, 15rem); line-height: 0.85; color: var(--surface-2); margin: 40px 0 16px; letter-spacing: 0.01em; user-select: none; overflow: hidden; white-space: nowrap; }
 .footer-bottom { display: flex; justify-content: space-between; gap: 16px; font-size: 0.8rem; flex-wrap: wrap; }
 
 /* ---------- Admin ---------- */
@@ -324,4 +326,14 @@ tbody tr:last-child td { border-bottom: none; }
   .cart-item .line-total { display: none; }
   .search { width: 100%; }
   .admin-bar > div { width: 100%; }
+}
+
+/* Buttons over the hero photo stay light whatever the theme */
+.hero .btn-outline { color: #f5f5f0; border-color: #f5f5f0; }
+.hero .btn-outline:hover { background: #f5f5f0; color: #0b0b0b; }
+
+/* Admin header on small screens: let the menu wrap below the logo and scroll */
+@media (max-width: 860px) {
+  .site-header .container:not(.header-inner) { flex-wrap: wrap; height: auto; padding-top: 12px; padding-bottom: 4px; row-gap: 6px; }
+  .site-header .container:not(.header-inner) .nav { width: 100%; justify-content: flex-start; overflow-x: auto; gap: 20px; padding-bottom: 8px; scrollbar-width: none; }
 }

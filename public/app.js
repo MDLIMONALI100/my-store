@@ -1,6 +1,10 @@
 // Shared helpers for every page: cart storage, formatting, header badge, toast.
+import { DEFAULTS, sanitize, buildCss, fontsUrl } from "/theme.js";
+
 const CART_KEY = "my-store-cart";
-export const STORE_NAME = "Streetwear";
+// Design settings are injected by the Worker as window.SITE (see src/index.js).
+export const SITE = sanitize(window.SITE || DEFAULTS);
+export const STORE_NAME = SITE.store_name;
 
 export function formatPrice(cents) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(cents / 100);
@@ -78,19 +82,18 @@ export function thumb(p) {
 export const CATEGORIES = ["Biker", "Bomber", "Café Racer", "Suede"];
 const NAV = [["/", "Shop"], ...CATEGORIES.map((c) => [`/?category=${encodeURIComponent(c)}`, c])];
 
-function renderChrome() {
+function renderChrome(site = SITE) {
+  const name = escapeHtml(site.store_name);
   const header = document.querySelector("[data-site-header]");
   if (header) {
     const here = location.pathname + location.search;
-    header.outerHTML = `
-      <div class="marquee" aria-hidden="true">
-        <div class="marquee-track">
-          ${"<span>Leather season is here</span><span>★</span><span>Free shipping over $50</span><span>★</span><span>New drop: 16 jackets</span><span>★</span>".repeat(4)}
-        </div>
-      </div>
+    const items = site.announcement.split("|").map((t) => t.trim()).filter(Boolean);
+    const marquee = items.map((t) => `<span>${escapeHtml(t)}</span><span>★</span>`).join("");
+    header.innerHTML = `
+      ${items.length ? `<div class="marquee" aria-hidden="true"><div class="marquee-track">${marquee.repeat(Math.max(4, Math.ceil(12 / items.length)))}</div></div>` : ""}
       <header class="site-header">
         <div class="container header-inner">
-          <a href="/" class="logo">${STORE_NAME}<span class="logo-dot">.</span></a>
+          <a href="/" class="logo">${name}<span class="logo-dot">.</span></a>
           <nav class="nav" aria-label="Main">
             ${NAV.map(([href, label]) => `<a href="${href}" ${href === here ? 'aria-current="page"' : ""}>${label}</a>`).join("")}
           </nav>
@@ -102,7 +105,7 @@ function renderChrome() {
   }
   const footer = document.querySelector("[data-site-footer]");
   if (footer) {
-    footer.outerHTML = `
+    footer.innerHTML = `
       <footer class="site-footer">
         <div class="container">
           <div class="footer-grid">
@@ -117,13 +120,13 @@ function renderChrome() {
               <span>No payment taken online</span>
             </div>
             <div class="footer-note">
-              <h4>${STORE_NAME}</h4>
+              <h4>${name}</h4>
               <p>Leather jackets with attitude. Built to be worn in, not worn out.</p>
             </div>
           </div>
-          <div class="footer-wordmark" aria-hidden="true">${STORE_NAME.toUpperCase()}</div>
+          <div class="footer-wordmark" aria-hidden="true">${name}</div>
           <div class="footer-bottom">
-            <span>© ${new Date().getFullYear()} ${STORE_NAME}</span>
+            <span>© ${new Date().getFullYear()} ${name}</span>
             <span>Photos: Unsplash</span>
           </div>
         </div>
@@ -133,3 +136,33 @@ function renderChrome() {
 
 renderChrome();
 updateCartCount();
+if (STORE_NAME !== "Streetwear") document.title = document.title.replace("Streetwear", STORE_NAME);
+
+// Live preview: the admin Design page shows the store in an iframe and sends
+// unsaved settings here. Only messages from this same site are accepted, and
+// they only change what this one browser tab shows.
+window.addEventListener("message", (e) => {
+  if (e.origin !== location.origin || e.data?.type !== "site-preview") return;
+  const site = sanitize(e.data.settings);
+  let style = document.getElementById("site-settings");
+  if (!style) {
+    style = document.createElement("style");
+    style.id = "site-settings";
+    document.head.appendChild(style);
+  }
+  style.textContent = buildCss(site);
+  const font = document.getElementById("font-link");
+  if (font) font.href = fontsUrl(site);
+  document.querySelectorAll("[data-setting]").forEach((el) => {
+    const key = el.dataset.setting;
+    if (!(key in site)) return;
+    if (key === "shop_title" && new URLSearchParams(location.search).get("category")) return;
+    el.textContent = site[key];
+  });
+  document.querySelectorAll("[data-section]").forEach((el) => {
+    el.style.display = site[el.dataset.section] ? "" : "none";
+  });
+  renderChrome(site);
+  updateCartCount();
+});
+if (window.parent !== window) window.parent.postMessage({ type: "preview-ready" }, location.origin);

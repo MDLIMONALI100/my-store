@@ -1,0 +1,317 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>Design · Streetwear Admin</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/styles.css" />
+    <style>
+      .design { display: grid; grid-template-columns: 380px 1fr; gap: 20px; align-items: start; padding-bottom: 40px; }
+      .design-form { display: flex; flex-direction: column; gap: 12px; }
+      .group { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }
+      .group summary { padding: 14px 16px; cursor: pointer; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em; font-size: 0.8rem; list-style: none; display: flex; justify-content: space-between; }
+      .group summary::after { content: "+"; color: var(--muted); }
+      .group[open] summary::after { content: "–"; }
+      .group-body { padding: 0 16px 16px; display: flex; flex-direction: column; gap: 14px; }
+      .range-row { display: flex; align-items: center; gap: 12px; }
+      .range-row input[type="range"] { flex: 1; accent-color: var(--accent); padding: 0; }
+      .range-row output { min-width: 36px; text-align: right; font-weight: 800; font-variant-numeric: tabular-nums; }
+      .color-row { display: flex; gap: 8px; }
+      .color-row input[type="color"] { width: 52px; flex: none; }
+      .color-row input[type="text"] { font-family: ui-monospace, monospace; text-transform: lowercase; }
+      .warn { color: var(--danger); font-size: 0.85rem; font-weight: 600; margin: 0; }
+      .warn:empty { display: none; }
+      .preview-wrap { position: sticky; top: 84px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+      .preview-bar { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; border-bottom: 1px solid var(--border); gap: 8px; flex-wrap: wrap; }
+      .preview-bar .hint { margin: 0; }
+      .preview-stage { background: var(--bg); position: relative; overflow: hidden; height: calc(100vh - 170px); min-height: 480px; }
+      /* The store renders at a real desktop width, scaled down to fit, so the
+         layout matches what customers see on a computer. */
+      .preview-stage iframe { border: 0; position: absolute; top: 0; left: 0; transform-origin: top left; background: #fff; }
+      .preview-stage.mobile iframe { border-left: 1px solid var(--border); border-right: 1px solid var(--border); }
+      .save-bar { position: sticky; bottom: 0; background: var(--bg); padding: 12px 0; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; border-top: 1px solid var(--border); z-index: 5; }
+      .save-bar .status { color: var(--muted); font-size: 0.85rem; margin-left: auto; }
+      .save-bar .status.dirty { color: var(--accent); }
+      @media (max-width: 960px) {
+        .design { grid-template-columns: 1fr; }
+        .preview-wrap { position: static; order: -1; }
+        .preview-stage { height: 520px; }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="container">
+        <a href="/admin" class="logo">Streetwear<span class="logo-dot">.</span> Admin</a>
+        <nav class="nav">
+          <a href="/admin/">Orders</a>
+          <a href="/admin/products">Products</a>
+          <a href="/admin/settings" class="active">Design</a>
+          <a href="/" target="_blank" rel="noopener">View store ↗</a>
+        </nav>
+      </div>
+    </header>
+
+    <main class="container">
+      <div class="admin-bar">
+        <h1>Design</h1>
+        <div class="field" style="flex-direction:row;align-items:center;gap:8px">
+          <label for="preset" style="white-space:nowrap">Start from</label>
+          <select id="preset" style="min-width:200px"></select>
+        </div>
+      </div>
+
+      <div class="design">
+        <form class="design-form" id="form" novalidate>
+          <div id="groups"></div>
+          <div class="save-bar">
+            <button type="submit" class="btn btn-lg" id="save">Save &amp; publish</button>
+            <button type="button" class="btn btn-secondary btn-lg" id="undo">Undo changes</button>
+            <span class="status" id="status">Loading…</span>
+          </div>
+        </form>
+
+        <section class="preview-wrap" aria-label="Live preview">
+          <div class="preview-bar">
+            <p class="hint">Live preview. Changes show here instantly; customers see them after you save.</p>
+            <div class="filters" style="margin:0" role="group" aria-label="Preview size">
+              <button type="button" class="chip" data-device="desktop" aria-pressed="true">Desktop</button>
+              <button type="button" class="chip" data-device="mobile" aria-pressed="false">Phone</button>
+            </div>
+          </div>
+          <div class="preview-stage" id="stage">
+            <iframe id="preview" src="/" title="Store preview"></iframe>
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <script type="module">
+      import { api, toast, escapeHtml } from "/app.js";
+      import { DEFAULTS, PRESETS, HEADING_FONTS, BODY_FONTS, CARD_RATIOS, sanitize, contrast } from "/theme.js";
+
+      const GROUPS = [
+        { title: "Colors", open: true, fields: [
+          { key: "color_bg", type: "color", label: "Background" },
+          { key: "color_text", type: "color", label: "Text" },
+          { key: "color_accent", type: "color", label: "Accent", hint: "Buttons, badges, highlights and the announcement bar." },
+        ] },
+        { title: "Product grid", open: true, fields: [
+          { key: "grid_cols", type: "range", min: 2, max: 5, label: "Columns on desktop" },
+          { key: "grid_cols_mobile", type: "range", min: 1, max: 2, label: "Columns on phones" },
+          { key: "grid_gap", type: "range", min: 0, max: 40, unit: "px", label: "Space between products" },
+          { key: "card_ratio", type: "select", label: "Photo shape", options: Object.entries(CARD_RATIOS) },
+          { key: "radius", type: "range", min: 0, max: 24, unit: "px", label: "Corner roundness", hint: "Applies to photos, buttons and boxes." },
+          { key: "card_show_category", type: "check", label: "Show category above product name" },
+          { key: "card_show_sizes", type: "check", label: "Show size range" },
+          { key: "card_hover_zoom", type: "check", label: "Zoom photos on hover" },
+        ] },
+        { title: "Fonts", fields: [
+          { key: "font_heading", type: "select", label: "Headings", options: HEADING_FONTS.map((f) => [f, f]) },
+          { key: "font_body", type: "select", label: "Body text", options: BODY_FONTS.map((f) => [f, f]) },
+          { key: "heading_uppercase", type: "check", label: "UPPERCASE headings" },
+        ] },
+        { title: "Brand & announcement", fields: [
+          { key: "store_name", type: "text", label: "Store name", max: 40 },
+          { key: "show_announcement", type: "check", label: "Show announcement bar" },
+          { key: "announcement", type: "text", label: "Announcement messages", max: 300, hint: "Separate messages with |" },
+        ] },
+        { title: "Home page", fields: [
+          { key: "hero_eyebrow", type: "text", label: "Small label above headline", max: 60 },
+          { key: "hero_line1", type: "text", label: "Headline line 1", max: 30 },
+          { key: "hero_line2", type: "text", label: "Headline line 2 (outlined)", max: 30 },
+          { key: "hero_text", type: "textarea", label: "Intro text", max: 240 },
+          { key: "hero_button", type: "text", label: "Button text", max: 30 },
+          { key: "shop_title", type: "text", label: "Product section title", max: 40 },
+          { key: "show_categories", type: "check", label: "Show “Shop by style” tiles" },
+          { key: "show_editorial", type: "check", label: "Show editorial banner" },
+          { key: "show_features", type: "check", label: "Show feature strip" },
+        ] },
+      ];
+
+      const form = document.getElementById("form");
+      const frame = document.getElementById("preview");
+      const statusEl = document.getElementById("status");
+      let saved = { ...DEFAULTS };
+      let draft = { ...DEFAULTS };
+
+      function fieldHtml(f) {
+        const id = `s-${f.key}`;
+        const hint = f.hint ? `<p class="hint" style="margin:0">${escapeHtml(f.hint)}</p>` : "";
+        if (f.type === "check") {
+          return `<label class="check"><input type="checkbox" id="${id}" name="${f.key}" />${escapeHtml(f.label)}</label>${hint}`;
+        }
+        let input;
+        if (f.type === "color") {
+          input = `<div class="color-row"><input type="color" id="${id}" name="${f.key}" /><input type="text" data-hex-for="${f.key}" maxlength="7" aria-label="${escapeHtml(f.label)} hex code" /></div>`;
+        } else if (f.type === "range") {
+          input = `<div class="range-row"><input type="range" id="${id}" name="${f.key}" min="${f.min}" max="${f.max}" step="1" /><output for="${id}" data-out="${f.key}"></output></div>`;
+        } else if (f.type === "select") {
+          input = `<select id="${id}" name="${f.key}">${f.options.map(([v, l]) => `<option value="${escapeHtml(v)}">${escapeHtml(l)}</option>`).join("")}</select>`;
+        } else if (f.type === "textarea") {
+          input = `<textarea id="${id}" name="${f.key}" rows="3" maxlength="${f.max}"></textarea>`;
+        } else {
+          input = `<input type="text" id="${id}" name="${f.key}" maxlength="${f.max}" />`;
+        }
+        return `<div class="field"><label for="${id}">${escapeHtml(f.label)}</label>${input}${hint}</div>`;
+      }
+
+      document.getElementById("groups").innerHTML = GROUPS.map(
+        (g) => `<details class="group" ${g.open ? "open" : ""}><summary>${escapeHtml(g.title)}</summary><div class="group-body">
+          ${g.fields.map(fieldHtml).join("")}
+          ${g.title === "Colors" ? `<p class="warn" id="contrast-warn"></p>` : ""}
+        </div></details>`
+      ).join("") ;
+      const ALL_FIELDS = GROUPS.flatMap((g) => g.fields);
+
+      document.getElementById("preset").innerHTML =
+        `<option value="">Choose a preset…</option>` + Object.keys(PRESETS).map((p) => `<option>${escapeHtml(p)}</option>`).join("");
+
+      function fillForm(s) {
+        for (const f of ALL_FIELDS) {
+          const el = form.elements[f.key];
+          if (f.type === "check") el.checked = !!s[f.key];
+          else el.value = s[f.key];
+          if (f.type === "color") form.querySelector(`[data-hex-for="${f.key}"]`).value = s[f.key];
+          if (f.type === "range") form.querySelector(`[data-out="${f.key}"]`).textContent = s[f.key] + (f.unit || "");
+        }
+      }
+
+      function readForm() {
+        const s = {};
+        for (const f of ALL_FIELDS) {
+          const el = form.elements[f.key];
+          s[f.key] = f.type === "check" ? el.checked : f.type === "range" ? Number(el.value) : el.value;
+        }
+        return sanitize(s);
+      }
+
+      function sendPreview() {
+        frame.contentWindow?.postMessage({ type: "site-preview", settings: draft }, location.origin);
+      }
+
+      function updateStatus() {
+        const dirty = JSON.stringify(draft) !== JSON.stringify(saved);
+        statusEl.textContent = dirty ? "Unsaved changes" : "All changes saved";
+        statusEl.classList.toggle("dirty", dirty);
+        document.getElementById("save").disabled = !dirty;
+        document.getElementById("undo").disabled = !dirty;
+
+        const warn = [];
+        if (contrast(draft.color_text, draft.color_bg) < 4.5) warn.push("Text and background are too similar, so text may be hard to read.");
+        if (contrast(draft.color_accent, draft.color_bg) < 1.6) warn.push("Accent is very close to the background, so buttons may disappear.");
+        document.getElementById("contrast-warn").textContent = warn.join(" ");
+      }
+
+      let timer;
+      function onChange() {
+        draft = readForm();
+        updateStatus();
+        clearTimeout(timer);
+        timer = setTimeout(sendPreview, 60);
+      }
+
+      form.addEventListener("input", (e) => {
+        const hexFor = e.target.dataset.hexFor;
+        if (hexFor) {
+          // Typing a hex code updates the color picker once it's a full code.
+          if (/^#[0-9a-fA-F]{6}$/.test(e.target.value)) form.elements[hexFor].value = e.target.value.toLowerCase();
+          else return;
+        }
+        const f = ALL_FIELDS.find((x) => x.key === e.target.name);
+        if (f?.type === "color") form.querySelector(`[data-hex-for="${f.key}"]`).value = e.target.value;
+        if (f?.type === "range") form.querySelector(`[data-out="${f.key}"]`).textContent = e.target.value + (f.unit || "");
+        onChange();
+      });
+      form.addEventListener("change", onChange);
+
+      document.getElementById("preset").addEventListener("change", (e) => {
+        const name = e.target.value;
+        if (!name) return;
+        // Presets change the look only; your text and section choices are kept.
+        draft = sanitize({ ...draft, ...lookOf(DEFAULTS), ...PRESETS[name] });
+        fillForm(draft);
+        onChange();
+        e.target.value = "";
+        toast(`Applied “${name}”. Save to publish.`);
+      });
+
+      function lookOf(s) {
+        const keys = ["color_bg", "color_text", "color_accent", "font_heading", "font_body", "heading_uppercase", "radius", "grid_cols", "grid_gap", "card_ratio"];
+        return Object.fromEntries(keys.map((k) => [k, s[k]]));
+      }
+
+      document.getElementById("undo").addEventListener("click", () => {
+        draft = { ...saved };
+        fillForm(draft);
+        updateStatus();
+        sendPreview();
+      });
+
+      form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const btn = document.getElementById("save");
+        btn.disabled = true;
+        btn.textContent = "Publishing…";
+        try {
+          ({ settings: saved } = await api("/api/admin/settings", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(draft),
+          }));
+          draft = { ...saved };
+          toast("Design published");
+        } catch (err) {
+          toast(err.message);
+        }
+        btn.textContent = "Save & publish";
+        updateStatus();
+      });
+
+      const stage = document.getElementById("stage");
+      let device = "desktop";
+      function fitPreview() {
+        const width = device === "mobile" ? 390 : 1280;
+        const scale = Math.min(1, stage.clientWidth / width);
+        frame.style.width = `${width}px`;
+        frame.style.height = `${stage.clientHeight / scale}px`;
+        frame.style.transform = `scale(${scale})`;
+        frame.style.left = `${Math.max(0, (stage.clientWidth - width * scale) / 2)}px`;
+      }
+      new ResizeObserver(fitPreview).observe(stage);
+      document.querySelectorAll("[data-device]").forEach((b) =>
+        b.addEventListener("click", () => {
+          device = b.dataset.device;
+          document.querySelectorAll("[data-device]").forEach((x) => x.setAttribute("aria-pressed", x === b));
+          stage.classList.toggle("mobile", device === "mobile");
+          fitPreview();
+        })
+      );
+      // The store page says when it's ready to receive the draft.
+      window.addEventListener("message", (e) => {
+        if (e.origin === location.origin && e.data?.type === "preview-ready") sendPreview();
+      });
+
+      // Re-apply the draft whenever the preview loads a new page (e.g. you click a product inside it).
+      frame.addEventListener("load", sendPreview);
+
+      window.addEventListener("beforeunload", (e) => {
+        if (JSON.stringify(draft) !== JSON.stringify(saved)) e.preventDefault();
+      });
+
+      try {
+        ({ settings: saved } = await api("/api/admin/settings"));
+        draft = { ...saved };
+        fillForm(draft);
+        updateStatus();
+        sendPreview();
+      } catch (err) {
+        statusEl.textContent = err.message;
+      }
+    </script>
+  </body>
+</html>
