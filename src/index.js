@@ -1,4 +1,5 @@
 import { sanitize, buildCss, fontsUrl, settingsScript } from "../public/theme.js";
+import { withMongo } from "./mongo.js";
 
 const SHIPPING_FLAT = 500;
 const FREE_SHIPPING_OVER = 5000;
@@ -304,6 +305,23 @@ async function safeEqual(a, b) {
 }
 
 async function handleAdminApi(request, env, path) {
+  // Connection check for MongoDB Atlas: GET /api/admin/mongo-health
+  if (path === "/api/admin/mongo-health" && request.method === "GET") {
+    const started = Date.now();
+    try {
+      const info = await withMongo(env, async (db) => {
+        await db.command({ ping: 1 });
+        const build = await db.admin().command({ buildInfo: 1 });
+        const collections = await db.listCollections({}, { nameOnly: true }).toArray();
+        return { database: db.databaseName, serverVersion: build.version, collections: collections.map((c) => c.name) };
+      });
+      return json({ ok: true, ms: Date.now() - started, ...info });
+    } catch (err) {
+      // Show the reason (never the connection string) so setup problems are easy to fix.
+      return json({ ok: false, ms: Date.now() - started, error: String(err?.message || err).replace(/mongodb(\+srv)?:\/\/[^\s]+/g, "[connection string]") }, 502);
+    }
+  }
+
   if (path === "/api/admin/settings") {
     if (request.method === "GET") return json({ settings: await getSettings(env) });
     if (request.method === "PUT") {

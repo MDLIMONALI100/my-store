@@ -14,5 +14,8 @@
   "type": "commonjs",
   "devDependencies": {
     "wrangler": "^4.149.0"
+  },
+  "dependencies": {
+    "mongodb": "^7.7.0"
   }
 }

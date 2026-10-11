@@ -2,6 +2,8 @@
   "name": "my-store",
   "main": "src/index.js",
   "compatibility_date": "2026-10-01",
+  // Needed by the MongoDB driver (it uses Node.js networking and crypto APIs).
+  "compatibility_flags": ["nodejs_compat"],
   "assets": {
     "directory": "./public",
     "binding": "ASSETS",
