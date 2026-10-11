@@ -18,7 +18,50 @@
     </header>
 
     <main class="container">
-      <section class="cart" id="cart"><p class="message">Loading…</p></section>
+      <section class="cart" id="cart">
+        <h1>Your cart</h1>
+        <div class="cart-main">
+          <div class="cart-items" id="items"><p class="message">Loading…</p></div>
+
+          <form id="checkout-form" class="checkout-form" hidden novalidate>
+            <h2>Shipping details</h2>
+            <div class="field full">
+              <label for="name">Full name</label>
+              <input id="name" name="name" autocomplete="name" required maxlength="100" />
+            </div>
+            <div class="field">
+              <label for="email">Email</label>
+              <input id="email" name="email" type="email" autocomplete="email" required maxlength="254" />
+            </div>
+            <div class="field">
+              <label for="phone">Phone</label>
+              <input id="phone" name="phone" type="tel" autocomplete="tel" required maxlength="30" />
+            </div>
+            <div class="field full">
+              <label for="address1">Street address</label>
+              <input id="address1" name="address1" autocomplete="address-line1" required maxlength="200" />
+            </div>
+            <div class="field full">
+              <label for="address2">Apartment, suite, etc. <span class="optional">(optional)</span></label>
+              <input id="address2" name="address2" autocomplete="address-line2" maxlength="200" />
+            </div>
+            <div class="field">
+              <label for="city">City</label>
+              <input id="city" name="city" autocomplete="address-level2" required maxlength="100" />
+            </div>
+            <div class="field">
+              <label for="postalCode">Postal code</label>
+              <input id="postalCode" name="postalCode" autocomplete="postal-code" required maxlength="20" />
+            </div>
+            <div class="field full">
+              <label for="country">Country</label>
+              <input id="country" name="country" autocomplete="country-name" required maxlength="100" />
+            </div>
+          </form>
+        </div>
+
+        <aside class="summary" id="summary" hidden></aside>
+      </section>
     </main>
 
     <footer class="site-footer">
@@ -29,6 +72,9 @@
       import { api, formatPrice, getCart, saveCart, escapeHtml } from "/app.js";
 
       const root = document.getElementById("cart");
+      const itemsEl = document.getElementById("items");
+      const summaryEl = document.getElementById("summary");
+      const form = document.getElementById("checkout-form");
       const SHIPPING_FLAT = 500;
       const FREE_SHIPPING_OVER = 5000;
       let catalog = {};
@@ -39,46 +85,47 @@
         saveCart(cart);
 
         if (cart.length === 0) {
-          root.innerHTML = `<h1>Your cart</h1><div class="empty" style="grid-column:1/-1">
-            <p>Your cart is empty.</p><a class="btn btn-lg" href="/">Start shopping</a></div>`;
+          itemsEl.innerHTML = `<div class="empty"><p>Your cart is empty.</p><a class="btn btn-lg" href="/">Start shopping</a></div>`;
+          form.hidden = true;
+          summaryEl.hidden = true;
           return;
         }
 
         const subtotal = cart.reduce((s, l) => s + catalog[l.id].price * l.qty, 0);
         const shipping = subtotal >= FREE_SHIPPING_OVER ? 0 : SHIPPING_FLAT;
 
-        root.innerHTML = `
-          <h1>Your cart</h1>
-          <div class="cart-items">
-            ${cart
-              .map((l) => {
-                const p = catalog[l.id];
-                return `
-              <div class="cart-item">
-                <div class="thumb" style="background:${p.color}" aria-hidden="true">${p.emoji}</div>
-                <div>
-                  <a href="/product?id=${p.id}"><strong>${escapeHtml(p.name)}</strong></a>
-                  <div class="hint">${formatPrice(p.price)} each</div>
-                </div>
-                <div style="display:flex;gap:4px;align-items:center">
-                  <input class="qty" type="number" min="1" max="10" value="${l.qty}" data-qty="${p.id}" aria-label="Quantity for ${escapeHtml(p.name)}" />
-                  <button class="btn btn-ghost" data-remove="${p.id}" aria-label="Remove ${escapeHtml(p.name)}">✕</button>
-                </div>
-                <strong class="line-total">${formatPrice(p.price * l.qty)}</strong>
-              </div>`;
-              })
-              .join("")}
-          </div>
-          <aside class="summary">
-            <h2>Order summary</h2>
-            <div class="row"><span>Subtotal</span><span>${formatPrice(subtotal)}</span></div>
-            <div class="row"><span>Shipping</span><span>${shipping === 0 ? "Free" : formatPrice(shipping)}</span></div>
-            <div class="row total"><span>Total</span><span>${formatPrice(subtotal + shipping)}</span></div>
-            <button class="btn btn-lg" id="checkout">Place order</button>
-            <p class="hint">${shipping === 0 ? "You've unlocked free shipping." : `Add ${formatPrice(FREE_SHIPPING_OVER - subtotal)} more for free shipping.`}</p>
-            <p class="hint">Demo store: no payment is taken.</p>
-            <p class="hint" id="error" style="color:var(--danger)"></p>
-          </aside>`;
+        itemsEl.innerHTML = cart
+          .map((l) => {
+            const p = catalog[l.id];
+            const low = l.qty > p.stock;
+            return `
+            <div class="cart-item">
+              <div class="thumb" style="background:${p.color}" aria-hidden="true">${p.emoji}</div>
+              <div>
+                <a href="/product?id=${p.id}"><strong>${escapeHtml(p.name)}</strong></a>
+                <div class="hint">${formatPrice(p.price)} each</div>
+                ${low ? `<div class="hint" style="color:var(--danger)">${p.stock === 0 ? "Sold out" : `Only ${p.stock} left`}</div>` : ""}
+              </div>
+              <div style="display:flex;gap:4px;align-items:center">
+                <input class="qty" type="number" min="1" max="10" value="${l.qty}" data-qty="${p.id}" aria-label="Quantity for ${escapeHtml(p.name)}" />
+                <button type="button" class="btn btn-ghost" data-remove="${p.id}" aria-label="Remove ${escapeHtml(p.name)}">✕</button>
+              </div>
+              <strong class="line-total">${formatPrice(p.price * l.qty)}</strong>
+            </div>`;
+          })
+          .join("");
+
+        form.hidden = false;
+        summaryEl.hidden = false;
+        summaryEl.innerHTML = `
+          <h2>Order summary</h2>
+          <div class="row"><span>Subtotal</span><span>${formatPrice(subtotal)}</span></div>
+          <div class="row"><span>Shipping</span><span>${shipping === 0 ? "Free" : formatPrice(shipping)}</span></div>
+          <div class="row total"><span>Total</span><span>${formatPrice(subtotal + shipping)}</span></div>
+          <button type="submit" form="checkout-form" class="btn btn-lg" id="place">Place order</button>
+          <p class="form-error" id="error" role="alert"></p>
+          <p class="hint">${shipping === 0 ? "You've unlocked free shipping." : `Add ${formatPrice(FREE_SHIPPING_OVER - subtotal)} more for free shipping.`}</p>
+          <p class="hint">No payment is taken online.</p>`;
       }
 
       root.addEventListener("change", (e) => {
@@ -89,35 +136,57 @@
         render();
       });
 
-      root.addEventListener("click", async (e) => {
+      root.addEventListener("click", (e) => {
         const removeId = e.target.dataset.remove;
-        if (removeId) {
-          saveCart(getCart().filter((l) => l.id !== removeId));
-          render();
+        if (!removeId) return;
+        saveCart(getCart().filter((l) => l.id !== removeId));
+        render();
+      });
+
+      form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const errorEl = document.getElementById("error");
+        const button = document.getElementById("place");
+        errorEl.textContent = "";
+
+        // Highlight the first empty or invalid field before calling the server.
+        const invalid = [...form.elements].find((el) => el.willValidate && !el.checkValidity());
+        if (invalid) {
+          invalid.focus();
+          errorEl.textContent = `Please check: ${form.querySelector(`label[for="${invalid.id}"]`).firstChild.textContent.trim()}`;
           return;
         }
-        if (e.target.id === "checkout") {
-          e.target.disabled = true;
-          e.target.textContent = "Placing order…";
+
+        button.disabled = true;
+        button.textContent = "Placing order…";
+        try {
+          const customer = Object.fromEntries(new FormData(form));
+          const order = await api("/api/checkout", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ items: getCart(), customer }),
+          });
+          saveCart([]);
+          root.innerHTML = `
+            <div class="order-done">
+              <h2>Thank you, your order is placed!</h2>
+              <p>Order number <strong>${escapeHtml(order.orderId)}</strong></p>
+              <p>Total ${formatPrice(order.total)}</p>
+              <p class="hint">We'll contact you at ${escapeHtml(order.email)} when it ships.</p>
+              <a class="btn btn-lg" href="/">Keep shopping</a>
+            </div>`;
+        } catch (err) {
+          errorEl.textContent = err.message;
+          button.disabled = false;
+          button.textContent = "Place order";
+          // Stock may have changed; refresh it so the cart shows what's left.
           try {
-            const order = await api("/api/checkout", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ items: getCart() }),
-            });
-            saveCart([]);
-            root.innerHTML = `
-              <div class="order-done">
-                <h2>Order placed!</h2>
-                <p>Order <strong>${escapeHtml(order.orderId)}</strong> · Total ${formatPrice(order.total)}</p>
-                <p class="hint">${escapeHtml(order.note)}</p>
-                <a class="btn btn-lg" href="/">Keep shopping</a>
-              </div>`;
-          } catch (err) {
-            document.getElementById("error").textContent = err.message;
-            e.target.disabled = false;
-            e.target.textContent = "Place order";
-          }
+            const { products } = await api("/api/products");
+            catalog = Object.fromEntries(products.map((p) => [p.id, p]));
+            const msg = errorEl.textContent;
+            render();
+            document.getElementById("error").textContent = msg;
+          } catch {}
         }
       });
 
@@ -126,7 +195,7 @@
         catalog = Object.fromEntries(products.map((p) => [p.id, p]));
         render();
       } catch (err) {
-        root.innerHTML = `<p class="message error">Couldn't load your cart. ${escapeHtml(err.message)}</p>`;
+        itemsEl.innerHTML = `<p class="message error">Couldn't load your cart. ${escapeHtml(err.message)}</p>`;
       }
     </script>
   </body>

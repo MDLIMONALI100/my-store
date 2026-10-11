@@ -4,6 +4,20 @@
   "compatibility_date": "2026-10-01",
   "assets": {
     "directory": "./public",
-    "binding": "ASSETS"
+    "binding": "ASSETS",
+    // The Worker runs before static files for these paths,
+    // so the API works and /admin can be password-protected.
+    "run_worker_first": ["/api/*", "/admin*"]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "my-store-db",
+      "database_id": "be77e626-01be-413f-ad46-b763929d3520",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "observability": {
+    "enabled": true
   }
 }

@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>Orders · My Store Admin</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="container">
+        <a href="/admin" class="logo">My Store · Admin</a>
+        <nav class="nav">
+          <a href="/" target="_blank" rel="noopener">View store ↗</a>
+        </nav>
+      </div>
+    </header>
+
+    <main class="container">
+      <div class="admin-bar">
+        <h1>Orders</h1>
+        <button class="btn btn-secondary" id="refresh">Refresh</button>
+      </div>
+      <div class="filters" id="filters" role="group" aria-label="Filter by status"></div>
+
+      <div class="admin-layout">
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Order</th>
+                <th>Date</th>
+                <th>Customer</th>
+                <th class="num">Items</th>
+                <th class="num">Total</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="rows"><tr><td colspan="6" class="message">Loading…</td></tr></tbody>
+          </table>
+        </div>
+        <aside class="detail" id="detail"><p class="hint">Select an order to see its details.</p></aside>
+      </div>
+    </main>
+
+    <script type="module">
+      import { api, formatPrice, toast, escapeHtml } from "/app.js";
+
+      const rowsEl = document.getElementById("rows");
+      const detailEl = document.getElementById("detail");
+      const filtersEl = document.getElementById("filters");
+      let filter = "all";
+      let selectedId = null;
+
+      const fmtDate = (iso) =>
+        new Date(iso).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+
+      const ACTIONS = {
+        shipped: { label: "Mark as shipped", cls: "btn" },
+        new: { label: "Move back to new", cls: "btn btn-secondary" },
+        cancelled: { label: "Cancel order", cls: "btn btn-danger" },
+      };
+
+      async function loadOrders() {
+        try {
+          const q = filter === "all" ? "" : `?status=${filter}`;
+          const { orders, counts } = await api(`/api/admin/orders${q}`);
+          const all = Object.values(counts).reduce((a, b) => a + b, 0);
+          filtersEl.innerHTML = [["all", all], ...Object.entries(counts)]
+            .map(([s, n]) => `<button class="chip" data-status="${s}" aria-pressed="${s === filter}">${s[0].toUpperCase() + s.slice(1)} (${n})</button>`)
+            .join("");
+
+          rowsEl.innerHTML = orders.length
+            ? orders
+                .map(
+                  (o) => `
+              <tr data-id="${o.id}" aria-selected="${o.id === selectedId}" tabindex="0">
+                <td><strong>${o.id}</strong></td>
+                <td>${fmtDate(o.created_at)}</td>
+                <td>${escapeHtml(o.customer_name)}</td>
+                <td class="num">${o.item_count}</td>
+                <td class="num">${formatPrice(o.total)}</td>
+                <td><span class="badge ${o.status}">${o.status}</span></td>
+              </tr>`
+                )
+                .join("")
+            : `<tr><td colspan="6" class="message">No orders yet.</td></tr>`;
+        } catch (err) {
+          rowsEl.innerHTML = `<tr><td colspan="6" class="message error">${escapeHtml(err.message)}</td></tr>`;
+        }
+      }
+
+      async function showOrder(id) {
+        selectedId = id;
+        rowsEl.querySelectorAll("tr[data-id]").forEach((tr) => tr.setAttribute("aria-selected", tr.dataset.id === id));
+        detailEl.innerHTML = `<p class="hint">Loading…</p>`;
+        try {
+          const { order: o } = await api(`/api/admin/orders/${id}`);
+          renderDetail(o);
+        } catch (err) {
+          detailEl.innerHTML = `<p class="message error">${escapeHtml(err.message)}</p>`;
+        }
+      }
+
+      function renderDetail(o) {
+        detailEl.innerHTML = `
+          <h2>${o.id}</h2>
+          <span class="badge ${o.status}">${o.status}</span>
+          <p class="hint">Placed ${fmtDate(o.created_at)}${o.updated_at !== o.created_at ? ` · updated ${fmtDate(o.updated_at)}` : ""}</p>
+
+          <h3>Customer</h3>
+          <div><strong>${escapeHtml(o.customer_name)}</strong></div>
+          <div><a href="mailto:${escapeHtml(o.email)}">${escapeHtml(o.email)}</a></div>
+          <div><a href="tel:${escapeHtml(o.phone)}">${escapeHtml(o.phone)}</a></div>
+
+          <h3>Ship to</h3>
+          <address>
+            ${escapeHtml(o.address_line1)}<br />
+            ${o.address_line2 ? escapeHtml(o.address_line2) + "<br />" : ""}
+            ${escapeHtml(o.city)} ${escapeHtml(o.postal_code)}<br />
+            ${escapeHtml(o.country)}
+          </address>
+
+          <h3>Items</h3>
+          ${o.items
+            .map((i) => `<div class="row"><span>${i.qty} × ${escapeHtml(i.name)}</span><span>${formatPrice(i.line_total)}</span></div>`)
+            .join("")}
+          <div class="row" style="margin-top:10px"><span>Subtotal</span><span>${formatPrice(o.subtotal)}</span></div>
+          <div class="row"><span>Shipping</span><span>${o.shipping === 0 ? "Free" : formatPrice(o.shipping)}</span></div>
+          <div class="row total"><span>Total</span><span>${formatPrice(o.total)}</span></div>
+
+          <div class="actions">
+            ${o.allowed.map((s) => `<button class="${ACTIONS[s].cls}" data-set="${s}">${ACTIONS[s].label}</button>`).join("")}
+          </div>
+          ${o.status === "cancelled" ? `<p class="hint">Cancelled orders are final. Their items were put back in stock.</p>` : ""}`;
+      }
+
+      detailEl.addEventListener("click", async (e) => {
+        const next = e.target.dataset.set;
+        if (!next || !selectedId) return;
+        if (next === "cancelled" && !confirm(`Cancel ${selectedId}? Its items go back in stock, and this can't be undone.`)) return;
+        e.target.disabled = true;
+        try {
+          const { order } = await api(`/api/admin/orders/${selectedId}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ status: next }),
+          });
+          renderDetail(order);
+          toast(`${order.id} marked as ${order.status}`);
+          loadOrders();
+        } catch (err) {
+          toast(err.message);
+          e.target.disabled = false;
+        }
+      });
+
+      rowsEl.addEventListener("click", (e) => {
+        const tr = e.target.closest("tr[data-id]");
+        if (tr) showOrder(tr.dataset.id);
+      });
+      rowsEl.addEventListener("keydown", (e) => {
+        const tr = e.target.closest("tr[data-id]");
+        if (tr && (e.key === "Enter" || e.key === " ")) {
+          e.preventDefault();
+          showOrder(tr.dataset.id);
+        }
+      });
+      filtersEl.addEventListener("click", (e) => {
+        const s = e.target.dataset.status;
+        if (!s) return;
+        filter = s;
+        loadOrders();
+      });
+      document.getElementById("refresh").addEventListener("click", loadOrders);
+
+      loadOrders();
+    </script>
+  </body>
+</html>
