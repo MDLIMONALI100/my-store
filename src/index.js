@@ -1,5 +1,6 @@
 import { sanitize, buildCss, fontsUrl, settingsScript } from "../public/theme.js";
 import { withMongo } from "./mongo.js";
+import { validateReview, addReview, getProductReviews, listReviews, moderateReview } from "./reviews.js";
 
 const SHIPPING_FLAT = 500;
 const FREE_SHIPPING_OVER = 5000;
@@ -107,6 +108,22 @@ async function handlePublicApi(request, env, url, path) {
     return json({ products: results });
   }
 
+  // Reviews (stored in MongoDB)
+  const reviewMatch = path.match(/^\/api\/products\/([a-z0-9-]+)\/reviews$/);
+  if (reviewMatch) {
+    const product = await env.DB.prepare(`SELECT id FROM products WHERE id = ? AND hidden = 0`).bind(reviewMatch[1]).first();
+    if (!product) return json({ error: "Product not found" }, 404);
+    if (request.method === "GET") return json(await getProductReviews(env, product.id));
+    if (request.method === "POST") {
+      const review = validateReview(await readJson(request));
+      // Quietly accept bot submissions without saving them.
+      if (review.error === "spam") return json({ ok: true, pending: true }, 201);
+      if (review.error) return json({ error: review.error }, 400);
+      await addReview(env, product.id, review.value);
+      return json({ ok: true, pending: true }, 201);
+    }
+  }
+
   const match = path.match(/^\/api\/products\/([a-z0-9-]+)$/);
   if (match && request.method === "GET") {
     const product = await env.DB.prepare(`SELECT ${PRODUCT_COLS} FROM products WHERE id = ? AND hidden = 0`).bind(match[1]).first();
@@ -120,7 +137,7 @@ async function handlePublicApi(request, env, url, path) {
   return json({ error: "Not found" }, 404);
 }
 
-const PRODUCT_COLS = `id, name, category, price, emoji, color, description, stock, sizes,
+const PRODUCT_COLS = `id, name, category, price, emoji, color, description, stock, sizes, rating_avg, rating_count,
   CASE WHEN image_id IS NULL THEN NULL ELSE '/images/' || image_id END AS image_url`;
 
 // Image IDs are random and never reused (a new upload gets a new ID), so
@@ -337,6 +354,21 @@ async function handleAdminApi(request, env, path) {
       settingsCache = { value: site, at: Date.now() };
       return json({ settings: site });
     }
+  }
+
+  if (path === "/api/admin/reviews" && request.method === "GET") {
+    return json(await listReviews(env, new URL(request.url).searchParams.get("status")));
+  }
+  const reviewAdmin = path.match(/^\/api\/admin\/reviews\/([a-f0-9]{24})$/);
+  if (reviewAdmin && (request.method === "PATCH" || request.method === "DELETE")) {
+    const action = request.method === "DELETE" ? "delete" : (await readJson(request))?.status;
+    const result = await moderateReview(env, reviewAdmin[1], action);
+    if (result.error) return json({ error: result.error }, result.status);
+    // Copy the new average into D1 so product lists show it instantly.
+    await env.DB.prepare(`UPDATE products SET rating_avg = ?, rating_count = ? WHERE id = ?`)
+      .bind(result.average, result.count, result.productId)
+      .run();
+    return json({ ok: true, rating: { average: result.average, count: result.count } });
   }
 
   if (path.startsWith("/api/admin/products") || path === "/api/admin/images") {

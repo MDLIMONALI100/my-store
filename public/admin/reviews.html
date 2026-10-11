@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>Reviews · Streetwear Admin</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/styles.css" />
+    <style>
+      .review-cards { display: flex; flex-direction: column; gap: 12px; padding-bottom: 64px; }
+      .review-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 18px; display: grid; grid-template-columns: 1fr auto; gap: 8px 20px; }
+      .review-card.pending { border-left: 3px solid var(--accent); }
+      .review-card header { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+      .review-card header strong { text-transform: uppercase; font-size: 0.85rem; }
+      .review-card .product { color: var(--muted); font-size: 0.85rem; }
+      .review-card .product a { text-decoration: underline; }
+      .review-card p { margin: 4px 0 0; grid-column: 1; white-space: pre-line; }
+      .review-card .actions { grid-column: 2; grid-row: 1 / span 2; margin: 0; align-self: center; flex-direction: column; align-items: stretch; }
+      .review-card .actions .btn { padding: 8px 14px; }
+      @media (max-width: 640px) {
+        .review-card { grid-template-columns: 1fr; }
+        .review-card .actions { grid-column: 1; grid-row: auto; flex-direction: row; }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="container">
+        <a href="/admin" class="logo">Streetwear<span class="logo-dot">.</span> Admin</a>
+        <nav class="nav">
+          <a href="/admin/">Orders</a>
+          <a href="/admin/products">Products</a>
+          <a href="/admin/reviews" class="active">Reviews</a>
+          <a href="/admin/settings">Design</a>
+          <a href="/" target="_blank" rel="noopener">View store ↗</a>
+        </nav>
+      </div>
+    </header>
+
+    <main class="container">
+      <div class="admin-bar">
+        <h1>Reviews</h1>
+        <button class="btn btn-secondary" id="refresh">Refresh</button>
+      </div>
+      <p class="hint" style="margin:-8px 0 16px">New reviews wait here until you approve them. Stored in MongoDB.</p>
+      <div class="filters" id="filters" role="group" aria-label="Filter reviews"></div>
+      <div class="review-cards" id="list"><p class="message">Loading reviews…</p></div>
+    </main>
+
+    <script type="module">
+      import { api, toast, escapeHtml, starsHtml } from "/app.js";
+
+      const listEl = document.getElementById("list");
+      const filtersEl = document.getElementById("filters");
+      let filter = "pending";
+      let products = {};
+
+      const fmtDate = (iso) => new Date(iso).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+
+      async function load() {
+        listEl.innerHTML = `<p class="message">Loading reviews…</p>`;
+        try {
+          const [data, prod] = await Promise.all([
+            api(`/api/admin/reviews${filter === "all" ? "" : `?status=${filter}`}`),
+            Object.keys(products).length ? null : api("/api/admin/products"),
+          ]);
+          if (prod) products = Object.fromEntries(prod.products.map((p) => [p.id, p.name]));
+          const total = data.counts.pending + data.counts.approved;
+          filtersEl.innerHTML = [["pending", "Waiting for approval", data.counts.pending], ["approved", "Approved", data.counts.approved], ["all", "All", total]]
+            .map(([v, label, n]) => `<button class="chip" data-filter="${v}" aria-pressed="${v === filter}">${label} (${n})</button>`)
+            .join("");
+          listEl.innerHTML = data.reviews.length
+            ? data.reviews.map(card).join("")
+            : `<p class="message">${filter === "pending" ? "Nothing waiting. You're all caught up." : "No reviews yet."}</p>`;
+        } catch (err) {
+          listEl.innerHTML = `<p class="message error">${escapeHtml(err.message)}</p>`;
+        }
+      }
+
+      function card(r) {
+        const productName = products[r.productId] || r.productId;
+        return `
+          <article class="review-card ${r.status}" data-id="${r.id}">
+            <header>
+              ${starsHtml(r.rating)}
+              <strong>${escapeHtml(r.name)}</strong>
+              <span class="badge ${r.status === "pending" ? "new" : "shipped"}">${r.status === "pending" ? "Waiting" : "Approved"}</span>
+              <span class="product">on <a href="/product?id=${encodeURIComponent(r.productId)}" target="_blank" rel="noopener">${escapeHtml(productName)}</a> · ${fmtDate(r.createdAt)}</span>
+            </header>
+            <p>${escapeHtml(r.body)}</p>
+            <div class="actions">
+              ${r.status === "pending"
+                ? `<button class="btn" data-act="approved">Approve</button>`
+                : `<button class="btn btn-secondary" data-act="pending">Hide</button>`}
+              <button class="btn btn-danger" data-act="delete">Delete</button>
+            </div>
+          </article>`;
+      }
+
+      listEl.addEventListener("click", async (e) => {
+        const act = e.target.dataset.act;
+        if (!act) return;
+        const el = e.target.closest("[data-id]");
+        if (act === "delete" && !confirm("Delete this review permanently?")) return;
+        el.querySelectorAll("button").forEach((b) => (b.disabled = true));
+        try {
+          const res = await api(`/api/admin/reviews/${el.dataset.id}`,
+            act === "delete"
+              ? { method: "DELETE" }
+              : { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: act }) });
+          toast(act === "approved" ? `Approved · product now ${res.rating.average.toFixed(1)}★ (${res.rating.count})` : act === "delete" ? "Review deleted" : "Review hidden");
+          load();
+        } catch (err) {
+          toast(err.message);
+          el.querySelectorAll("button").forEach((b) => (b.disabled = false));
+        }
+      });
+
+      filtersEl.addEventListener("click", (e) => {
+        if (!e.target.dataset.filter) return;
+        filter = e.target.dataset.filter;
+        load();
+      });
+      document.getElementById("refresh").addEventListener("click", load);
+      load();
+    </script>
+  </body>
+</html>

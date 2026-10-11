@@ -76,7 +76,7 @@
     <div data-site-footer></div>
 
     <script type="module">
-      import { api, formatPrice, escapeHtml, thumb, parseSizes, STORE_NAME, SITE } from "/app.js";
+      import { api, formatPrice, escapeHtml, thumb, parseSizes, STORE_NAME, SITE, starsHtml } from "/app.js";
 
       const grid = document.getElementById("grid");
       const filters = document.getElementById("filters");
@@ -116,6 +116,7 @@
               <div class="card-body">
                 <span class="category">${escapeHtml(p.category)}</span>
                 <h3>${escapeHtml(p.name)}</h3>
+                ${p.rating_count ? `<span class="card-rating">${starsHtml(p.rating_avg)}<small>${p.rating_avg.toFixed(1)} (${p.rating_count})</small></span>` : ""}
                 <div class="card-footer">
                   <span class="price">${formatPrice(p.price)}</span>
                   <span class="category">${escapeHtml(sizeRange(p))}</span>

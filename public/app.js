@@ -177,3 +177,9 @@ window.addEventListener("message", (e) => {
   updateCartCount();
 });
 if (window.parent !== window) window.parent.postMessage({ type: "preview-ready" }, location.origin);
+
+// Star rating display, e.g. starsHtml(4.3). Partial stars are filled by width.
+export function starsHtml(rating, size = "") {
+  const r = Math.max(0, Math.min(5, Number(rating) || 0));
+  return `<span class="stars ${size}" style="--r:${r}" role="img" aria-label="${r.toFixed(1)} out of 5 stars"></span>`;
+}

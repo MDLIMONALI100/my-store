@@ -17,7 +17,7 @@
     <div data-site-footer></div>
 
     <script type="module">
-      import { api, formatPrice, addToCart, escapeHtml, thumb, parseSizes, STORE_NAME } from "/app.js";
+      import { api, formatPrice, addToCart, escapeHtml, thumb, parseSizes, STORE_NAME, starsHtml } from "/app.js";
 
       const main = document.getElementById("main");
       const id = new URLSearchParams(location.search).get("id");
@@ -43,6 +43,9 @@
               <span class="category">${escapeHtml(p.category)}</span>
               <h1>${escapeHtml(p.name)}</h1>
               <p class="price">${formatPrice(p.price)}</p>
+              <a href="#reviews" class="rating-link">
+                ${p.rating_count ? `${starsHtml(p.rating_avg)} <span>${p.rating_avg.toFixed(1)} · ${p.rating_count} review${p.rating_count === 1 ? "" : "s"}</span>` : `<span>No reviews yet · Write the first one</span>`}
+              </a>
               <p class="stock ${stockClass}">${stockText}</p>
               <p class="desc">${escapeHtml(p.description)}</p>
 
@@ -67,7 +70,39 @@
                 <li><strong>No payment online.</strong> We'll contact you to arrange it.</li>
               </ul>
             </div>
+          </section>
+
+          <section class="reviews" id="reviews" aria-labelledby="reviews-title">
+            <div class="section-head"><h2 id="reviews-title">Reviews</h2></div>
+            <div class="reviews-layout">
+              <div>
+                <div id="review-summary"></div>
+                <form id="review-form" class="review-form" novalidate>
+                  <h3>Write a review</h3>
+                  <fieldset class="star-input">
+                    <legend>Your rating</legend>
+                    ${[5, 4, 3, 2, 1].map((n) => `<input type="radio" name="rating" id="star-${n}" value="${n}" /><label for="star-${n}" title="${n} star${n > 1 ? "s" : ""}">★</label>`).join("")}
+                  </fieldset>
+                  <div class="field">
+                    <label for="review-name">Your name</label>
+                    <input id="review-name" name="name" maxlength="60" required autocomplete="given-name" />
+                  </div>
+                  <div class="field">
+                    <label for="review-body">Your review</label>
+                    <textarea id="review-body" name="body" rows="4" maxlength="1500" required placeholder="How's the fit, the leather, the feel?"></textarea>
+                  </div>
+                  <div class="hp" aria-hidden="true"><label>Website <input name="website" tabindex="-1" autocomplete="off" /></label></div>
+                  <p class="form-error" id="review-error" role="alert"></p>
+                  <button type="submit" class="btn btn-lg" id="review-submit">Submit review</button>
+                  <p class="hint">Reviews appear after a quick check by our team.</p>
+                </form>
+              </div>
+              <div id="review-list" class="review-list"><p class="hint">Loading reviews…</p></div>
+            </div>
           </section>`;
+
+        loadReviews(p.id);
+        setupReviewForm(p.id);
 
         document.getElementById("sizes")?.addEventListener("click", (e) => {
           const s = e.target.dataset.size;
@@ -89,6 +124,64 @@
         });
       } catch (err) {
         main.innerHTML = `<p class="message error">${escapeHtml(err.message)}</p><p class="message"><a href="/" class="link-arrow">← Back to shop</a></p>`;
+      }
+
+      // Reviews come from MongoDB, so they load after the product is on screen.
+      async function loadReviews(productId) {
+        const list = document.getElementById("review-list");
+        const summaryEl = document.getElementById("review-summary");
+        try {
+          const { summary, reviews } = await api(`/api/products/${encodeURIComponent(productId)}/reviews`);
+          summaryEl.innerHTML = summary.count
+            ? `<div class="review-summary">
+                 <div class="review-avg"><strong>${summary.average.toFixed(1)}</strong>${starsHtml(summary.average, "lg")}<span class="hint">${summary.count} review${summary.count === 1 ? "" : "s"}</span></div>
+                 <div class="review-bars">
+                   ${[5, 4, 3, 2, 1].map((n) => `<div class="review-bar"><span>${n}★</span><div><i style="width:${Math.round((summary.stars[n] / summary.count) * 100)}%"></i></div><span>${summary.stars[n]}</span></div>`).join("")}
+                 </div>
+               </div>`
+            : "";
+          list.innerHTML = reviews.length
+            ? reviews
+                .map(
+                  (r) => `
+              <article class="review">
+                <header>${starsHtml(r.rating)}<strong>${escapeHtml(r.name)}</strong><time class="hint" datetime="${escapeHtml(r.createdAt)}">${new Date(r.createdAt).toLocaleDateString(undefined, { dateStyle: "medium" })}</time></header>
+                <p>${escapeHtml(r.body)}</p>
+              </article>`
+                )
+                .join("")
+            : `<div class="review-empty"><p>No reviews yet.</p><span class="hint">Own this jacket? Be the first to review it.</span></div>`;
+        } catch {
+          list.innerHTML = `<p class="hint">Reviews couldn't load right now. Please refresh to try again.</p>`;
+        }
+      }
+
+      function setupReviewForm(productId) {
+        const form = document.getElementById("review-form");
+        form.addEventListener("submit", async (e) => {
+          e.preventDefault();
+          const errorEl = document.getElementById("review-error");
+          const btn = document.getElementById("review-submit");
+          errorEl.textContent = "";
+          const data = Object.fromEntries(new FormData(form));
+          if (!data.rating) return (errorEl.textContent = "Please choose a star rating.");
+          if ((data.name || "").trim().length < 2) return (errorEl.textContent = "Please enter your name."), form.elements.name.focus();
+          if ((data.body || "").trim().length < 10) return (errorEl.textContent = "Please write at least a sentence."), form.elements.body.focus();
+          btn.disabled = true;
+          btn.textContent = "Sending…";
+          try {
+            await api(`/api/products/${encodeURIComponent(productId)}/reviews`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ ...data, rating: Number(data.rating) }),
+            });
+            form.innerHTML = `<div class="review-thanks"><strong>Thanks for your review!</strong><p class="hint">It will appear here once our team has checked it.</p></div>`;
+          } catch (err) {
+            errorEl.textContent = err.message;
+            btn.disabled = false;
+            btn.textContent = "Submit review";
+          }
+        });
       }
     </script>
   </body>

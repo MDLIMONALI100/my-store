@@ -411,3 +411,62 @@ html.drawer-lock, html.drawer-lock body { overflow: hidden; }
   .drawer { overflow-y: auto; }
   .drawer-body { flex: none; overflow: visible; }
 }
+
+/* ---------- Ratings & reviews ---------- */
+.stars {
+  --pct: calc(var(--r) / 5 * 100%);
+  display: inline-block; font-size: 0.9rem; line-height: 1; letter-spacing: 2px; vertical-align: middle;
+}
+.stars::before {
+  content: "★★★★★";
+  background: linear-gradient(90deg, var(--accent) var(--pct), var(--border) var(--pct));
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.stars.lg { font-size: 1.3rem; }
+.card-rating { display: inline-flex; align-items: center; gap: 6px; font-size: 0.78rem; color: var(--muted); font-weight: 700; }
+.rating-link { display: inline-flex; align-items: center; gap: 8px; font-size: 0.85rem; color: var(--muted); font-weight: 600; margin-top: 4px; }
+.rating-link:hover span { color: var(--text); text-decoration: underline; }
+
+.reviews { border-top: 1px solid var(--border); padding: 48px 0 72px; scroll-margin-top: 90px; }
+.reviews .section-head h2 { font-size: clamp(2.4rem, 5vw, 3.6rem); }
+.reviews-layout { display: grid; grid-template-columns: minmax(280px, 1fr) 1.6fr; gap: 40px; align-items: start; }
+.review-summary { display: flex; gap: 24px; align-items: center; margin-bottom: 28px; flex-wrap: wrap; }
+.review-avg { display: flex; flex-direction: column; gap: 4px; }
+.review-avg strong { font-family: var(--display); font-size: 3.6rem; line-height: 1; font-weight: 400; }
+.review-avg .hint { margin: 0; }
+.review-bars { flex: 1; min-width: 180px; display: flex; flex-direction: column; gap: 6px; }
+.review-bar { display: grid; grid-template-columns: 28px 1fr 24px; gap: 8px; align-items: center; font-size: 0.8rem; color: var(--muted); }
+.review-bar div { height: 6px; background: var(--surface-2); border-radius: 999px; overflow: hidden; }
+.review-bar i { display: block; height: 100%; background: var(--accent); border-radius: 999px; }
+.review-bar span:last-child { text-align: right; }
+
+.review-form { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; display: flex; flex-direction: column; gap: 14px; }
+.review-form h3 { margin: 0; font-size: 1.8rem; }
+.review-form .btn { align-self: flex-start; }
+.review-form .hint { margin: 0; }
+.review-thanks strong { display: block; font-size: 1.1rem; color: var(--accent); margin-bottom: 4px; }
+.hp { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
+
+/* Star picker: radios in reverse order so hovering a star lights it and all before it */
+.star-input { border: 0; padding: 0; margin: 0; display: inline-flex; flex-direction: row-reverse; justify-content: flex-end; gap: 2px; }
+.star-input legend { font-size: 0.75rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 6px; float: left; width: 100%; }
+.star-input input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.star-input label { font-size: 2rem; line-height: 1; color: var(--border); cursor: pointer; transition: color .1s, transform .1s; }
+.star-input label:hover, .star-input label:hover ~ label,
+.star-input input:checked ~ label { color: var(--accent); }
+.star-input label:hover { transform: scale(1.15); }
+.star-input input:focus-visible + label { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+
+.review-list { display: flex; flex-direction: column; }
+.review { padding: 18px 0; border-bottom: 1px solid var(--border); }
+.review:first-child { padding-top: 0; }
+.review header { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.review header strong { text-transform: uppercase; font-size: 0.85rem; letter-spacing: 0.04em; }
+.review header time { margin: 0 0 0 auto; }
+.review p { margin: 0; color: color-mix(in srgb, var(--text) 85%, var(--bg)); white-space: pre-line; }
+.review-empty { padding: 32px; text-align: center; border: 1px dashed var(--border); border-radius: var(--radius); }
+.review-empty p { font-family: var(--display); font-size: 2rem; text-transform: uppercase; margin: 0 0 6px; }
+
+@media (max-width: 860px) {
+  .reviews-layout { grid-template-columns: 1fr; }
+}
