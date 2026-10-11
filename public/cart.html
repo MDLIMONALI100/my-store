@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Cart · My Store</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="container">
+        <a href="/" class="logo">My Store</a>
+        <nav class="nav">
+          <a href="/">Shop</a>
+          <a href="/cart" class="cart-link active">Cart<span class="cart-count"></span></a>
+        </nav>
+      </div>
+    </header>
+
+    <main class="container">
+      <section class="cart" id="cart"><p class="message">Loading…</p></section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="container">© My Store · Powered by Cloudflare Workers</div>
+    </footer>
+
+    <script type="module">
+      import { api, formatPrice, getCart, saveCart, escapeHtml } from "/app.js";
+
+      const root = document.getElementById("cart");
+      const SHIPPING_FLAT = 500;
+      const FREE_SHIPPING_OVER = 5000;
+      let catalog = {};
+
+      function render() {
+        // Drop anything that's no longer in the catalog.
+        const cart = getCart().filter((l) => catalog[l.id]);
+        saveCart(cart);
+
+        if (cart.length === 0) {
+          root.innerHTML = `<h1>Your cart</h1><div class="empty" style="grid-column:1/-1">
+            <p>Your cart is empty.</p><a class="btn btn-lg" href="/">Start shopping</a></div>`;
+          return;
+        }
+
+        const subtotal = cart.reduce((s, l) => s + catalog[l.id].price * l.qty, 0);
+        const shipping = subtotal >= FREE_SHIPPING_OVER ? 0 : SHIPPING_FLAT;
+
+        root.innerHTML = `
+          <h1>Your cart</h1>
+          <div class="cart-items">
+            ${cart
+              .map((l) => {
+                const p = catalog[l.id];
+                return `
+              <div class="cart-item">
+                <div class="thumb" style="background:${p.color}" aria-hidden="true">${p.emoji}</div>
+                <div>
+                  <a href="/product?id=${p.id}"><strong>${escapeHtml(p.name)}</strong></a>
+                  <div class="hint">${formatPrice(p.price)} each</div>
+                </div>
+                <div style="display:flex;gap:4px;align-items:center">
+                  <input class="qty" type="number" min="1" max="10" value="${l.qty}" data-qty="${p.id}" aria-label="Quantity for ${escapeHtml(p.name)}" />
+                  <button class="btn btn-ghost" data-remove="${p.id}" aria-label="Remove ${escapeHtml(p.name)}">✕</button>
+                </div>
+                <strong class="line-total">${formatPrice(p.price * l.qty)}</strong>
+              </div>`;
+              })
+              .join("")}
+          </div>
+          <aside class="summary">
+            <h2>Order summary</h2>
+            <div class="row"><span>Subtotal</span><span>${formatPrice(subtotal)}</span></div>
+            <div class="row"><span>Shipping</span><span>${shipping === 0 ? "Free" : formatPrice(shipping)}</span></div>
+            <div class="row total"><span>Total</span><span>${formatPrice(subtotal + shipping)}</span></div>
+            <button class="btn btn-lg" id="checkout">Place order</button>
+            <p class="hint">${shipping === 0 ? "You've unlocked free shipping." : `Add ${formatPrice(FREE_SHIPPING_OVER - subtotal)} more for free shipping.`}</p>
+            <p class="hint">Demo store: no payment is taken.</p>
+            <p class="hint" id="error" style="color:var(--danger)"></p>
+          </aside>`;
+      }
+
+      root.addEventListener("change", (e) => {
+        const id = e.target.dataset.qty;
+        if (!id) return;
+        const qty = Math.max(1, Math.min(10, parseInt(e.target.value, 10) || 1));
+        saveCart(getCart().map((l) => (l.id === id ? { ...l, qty } : l)));
+        render();
+      });
+
+      root.addEventListener("click", async (e) => {
+        const removeId = e.target.dataset.remove;
+        if (removeId) {
+          saveCart(getCart().filter((l) => l.id !== removeId));
+          render();
+          return;
+        }
+        if (e.target.id === "checkout") {
+          e.target.disabled = true;
+          e.target.textContent = "Placing order…";
+          try {
+            const order = await api("/api/checkout", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ items: getCart() }),
+            });
+            saveCart([]);
+            root.innerHTML = `
+              <div class="order-done">
+                <h2>Order placed!</h2>
+                <p>Order <strong>${escapeHtml(order.orderId)}</strong> · Total ${formatPrice(order.total)}</p>
+                <p class="hint">${escapeHtml(order.note)}</p>
+                <a class="btn btn-lg" href="/">Keep shopping</a>
+              </div>`;
+          } catch (err) {
+            document.getElementById("error").textContent = err.message;
+            e.target.disabled = false;
+            e.target.textContent = "Place order";
+          }
+        }
+      });
+
+      try {
+        const { products } = await api("/api/products");
+        catalog = Object.fromEntries(products.map((p) => [p.id, p]));
+        render();
+      } catch (err) {
+        root.innerHTML = `<p class="message error">Couldn't load your cart. ${escapeHtml(err.message)}</p>`;
+      }
+    </script>
+  </body>
+</html>

@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Product · My Store</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="container">
+        <a href="/" class="logo">My Store</a>
+        <nav class="nav">
+          <a href="/">Shop</a>
+          <a href="/cart" class="cart-link">Cart<span class="cart-count"></span></a>
+        </nav>
+      </div>
+    </header>
+
+    <main class="container" id="main"><p class="message">Loading…</p></main>
+
+    <footer class="site-footer">
+      <div class="container">© My Store · Powered by Cloudflare Workers</div>
+    </footer>
+
+    <script type="module">
+      import { api, formatPrice, addToCart, toast, escapeHtml } from "/app.js";
+
+      const main = document.getElementById("main");
+      const id = new URLSearchParams(location.search).get("id");
+
+      try {
+        if (!id) throw new Error("No product selected.");
+        const { product: p } = await api(`/api/products/${encodeURIComponent(id)}`);
+        document.title = `${p.name} · My Store`;
+        const inStock = p.stock > 0;
+
+        main.innerHTML = `
+          <a href="/" class="back">← Back to shop</a>
+          <section class="product">
+            <div class="thumb" style="background:${p.color}" aria-hidden="true">${p.emoji}</div>
+            <div>
+              <span class="category">${escapeHtml(p.category)}</span>
+              <h1>${escapeHtml(p.name)}</h1>
+              <p class="price">${formatPrice(p.price)}</p>
+              <p class="desc">${escapeHtml(p.description)}</p>
+              <p class="stock ${inStock ? "in" : "out"}">
+                ${inStock ? `In stock (${p.stock} available)` : "Sold out"}
+              </p>
+              <div class="qty-row">
+                <label for="qty" class="visually-hidden">Quantity</label>
+                <input id="qty" class="qty" type="number" min="1" max="${Math.min(10, p.stock)}" value="1" ${inStock ? "" : "disabled"} />
+                <button class="btn btn-lg" id="add" ${inStock ? "" : "disabled"}>Add to cart</button>
+              </div>
+            </div>
+          </section>`;
+
+        document.getElementById("add")?.addEventListener("click", () => {
+          const qty = Math.max(1, Math.min(10, parseInt(document.getElementById("qty").value, 10) || 1));
+          addToCart(p.id, qty);
+          toast(`${qty} × ${p.name} added to cart`);
+        });
+      } catch (err) {
+        main.innerHTML = `<p class="message error">${escapeHtml(err.message)}</p><p class="message"><a href="/">← Back to shop</a></p>`;
+      }
+    </script>
+  </body>
+</html>

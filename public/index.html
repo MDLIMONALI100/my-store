@@ -4,9 +4,96 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>My Store</title>
+    <meta name="description" content="Everyday goods, made well." />
+    <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
-    <h1>My Store</h1>
-    <p>Served by Cloudflare Workers static assets.</p>
+    <header class="site-header">
+      <div class="container">
+        <a href="/" class="logo">My Store</a>
+        <nav class="nav">
+          <a href="/" class="active">Shop</a>
+          <a href="/cart" class="cart-link">Cart<span class="cart-count"></span></a>
+        </nav>
+      </div>
+    </header>
+
+    <main class="container">
+      <section class="hero">
+        <h1>Everyday goods, made well.</h1>
+        <p>Simple, durable things for your wardrobe, desk and home. Free shipping on orders over $50.</p>
+      </section>
+
+      <div class="filters" id="filters" role="group" aria-label="Filter by category"></div>
+      <div class="grid" id="grid"><p class="message">Loading products…</p></div>
+    </main>
+
+    <footer class="site-footer">
+      <div class="container">© My Store · Powered by Cloudflare Workers</div>
+    </footer>
+
+    <script type="module">
+      import { api, formatPrice, addToCart, toast, escapeHtml } from "/app.js";
+
+      const grid = document.getElementById("grid");
+      const filters = document.getElementById("filters");
+      let all = [];
+      let active = "All";
+
+      function render() {
+        const list = active === "All" ? all : all.filter((p) => p.category === active);
+        grid.innerHTML = list
+          .map(
+            (p) => `
+          <article class="card">
+            <a href="/product?id=${p.id}">
+              <div class="thumb" style="background:${p.color}" aria-hidden="true">${p.emoji}</div>
+            </a>
+            <div class="card-body">
+              <span class="category">${escapeHtml(p.category)}</span>
+              <h3><a href="/product?id=${p.id}">${escapeHtml(p.name)}</a></h3>
+              <div class="card-footer">
+                <span class="price">${formatPrice(p.price)}</span>
+                <button class="btn" data-id="${p.id}" ${p.stock === 0 ? "disabled" : ""}>
+                  ${p.stock === 0 ? "Sold out" : "Add"}
+                </button>
+              </div>
+            </div>
+          </article>`
+          )
+          .join("");
+      }
+
+      function renderFilters() {
+        const cats = ["All", ...new Set(all.map((p) => p.category))];
+        filters.innerHTML = cats
+          .map((c) => `<button class="chip" aria-pressed="${c === active}" data-cat="${c}">${c}</button>`)
+          .join("");
+      }
+
+      filters.addEventListener("click", (e) => {
+        const cat = e.target.dataset.cat;
+        if (!cat) return;
+        active = cat;
+        renderFilters();
+        render();
+      });
+
+      grid.addEventListener("click", (e) => {
+        const id = e.target.dataset.id;
+        if (!id) return;
+        const p = all.find((x) => x.id === id);
+        addToCart(id);
+        toast(`${p.name} added to cart`);
+      });
+
+      try {
+        ({ products: all } = await api("/api/products"));
+        renderFilters();
+        render();
+      } catch (err) {
+        grid.innerHTML = `<p class="message error">Couldn't load products. ${escapeHtml(err.message)}</p>`;
+      }
+    </script>
   </body>
 </html>
