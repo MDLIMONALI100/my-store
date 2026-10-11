@@ -17,7 +17,7 @@
     <div data-site-footer></div>
 
     <script type="module">
-      import { api, formatPrice, addToCart, toast, escapeHtml, thumb, parseSizes, STORE_NAME } from "/app.js";
+      import { api, formatPrice, addToCart, escapeHtml, thumb, parseSizes, STORE_NAME } from "/app.js";
 
       const main = document.getElementById("main");
       const id = new URLSearchParams(location.search).get("id");
@@ -85,8 +85,7 @@
             return;
           }
           const qty = Math.max(1, Math.min(10, parseInt(document.getElementById("qty").value, 10) || 1));
-          addToCart(p.id, qty, selectedSize);
-          toast(`${qty} × ${p.name}${selectedSize ? ` (${selectedSize})` : ""} added`);
+          addToCart(p.id, qty, selectedSize); // opens the slide-out cart
         });
       } catch (err) {
         main.innerHTML = `<p class="message error">${escapeHtml(err.message)}</p><p class="message"><a href="/" class="link-arrow">← Back to shop</a></p>`;

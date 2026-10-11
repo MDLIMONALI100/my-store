@@ -37,11 +37,20 @@ export function addToCart(id, qty = 1, size = "") {
   if (line) line.qty = Math.min(line.qty + qty, 10);
   else cart.push({ id, size, qty: Math.min(qty, 10) });
   saveCart(cart);
+  window.dispatchEvent(new CustomEvent("cart:added", { detail: { id, size, qty } }));
 }
 
 export function updateCartCount() {
   const count = getCart().reduce((n, l) => n + l.qty, 0);
-  document.querySelectorAll(".cart-count").forEach((el) => (el.textContent = count > 0 ? String(count) : ""));
+  document.querySelectorAll(".cart-count").forEach((el) => {
+    const before = Number(el.textContent) || 0;
+    el.textContent = count > 0 ? String(count) : "";
+    if (count > before) {
+      el.classList.remove("bump");
+      void el.offsetWidth; // restart the animation
+      el.classList.add("bump");
+    }
+  });
 }
 
 export async function api(path, options) {
@@ -97,7 +106,7 @@ function renderChrome(site = SITE) {
           <nav class="nav" aria-label="Main">
             ${NAV.map(([href, label]) => `<a href="${href}" ${href === here ? 'aria-current="page"' : ""}>${label}</a>`).join("")}
           </nav>
-          <a href="/cart" class="cart-link" ${location.pathname === "/cart" ? 'aria-current="page"' : ""}>
+          <a href="/cart" class="cart-link" aria-haspopup="dialog">
             Cart <span class="cart-count"></span>
           </a>
         </div>
@@ -136,6 +145,8 @@ function renderChrome(site = SITE) {
 
 renderChrome();
 updateCartCount();
+// The slide-out cart only exists on the storefront, not in admin.
+if (document.querySelector(".site-header .cart-link")) import("/cart-drawer.js");
 if (STORE_NAME !== "Streetwear") document.title = document.title.replace("Streetwear", STORE_NAME);
 
 // Live preview: the admin Design page shows the store in an iframe and sends
