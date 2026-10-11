@@ -3,65 +3,128 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>My Store</title>
-    <meta name="description" content="Everyday goods, made well." />
+    <title>Streetwear · Leather Jackets</title>
+    <meta name="description" content="Leather jackets with attitude. Biker, bomber, café racer and suede styles." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="/styles.css" />
+    <link rel="preload" as="image" href="/img/hero.webp" />
   </head>
   <body>
-    <header class="site-header">
-      <div class="container">
-        <a href="/" class="logo">My Store</a>
-        <nav class="nav">
-          <a href="/" class="active">Shop</a>
-          <a href="/cart" class="cart-link">Cart<span class="cart-count"></span></a>
-        </nav>
-      </div>
-    </header>
+    <div data-site-header></div>
 
-    <main class="container">
-      <section class="hero">
-        <h1>Everyday goods, made well.</h1>
-        <p>Simple, durable things for your wardrobe, desk and home. Free shipping on orders over $50.</p>
+    <main>
+      <section class="hero" data-home style="background-image:url('/img/hero.webp')">
+        <div class="container hero-content">
+          <span class="eyebrow">New drop · Leather season</span>
+          <h1>Wear it<br /><span class="outline">loud.</span></h1>
+          <p>Biker, bomber, café racer and suede. Leather jackets cut for the street and built to be worn in.</p>
+          <div class="hero-actions">
+            <a href="#shop" class="btn btn-lg">Shop the drop</a>
+            <a href="/?category=Biker" class="btn btn-lg btn-outline">Biker jackets</a>
+          </div>
+        </div>
       </section>
 
-      <div class="filters" id="filters" role="group" aria-label="Filter by category"></div>
-      <div class="grid" id="grid"><p class="message">Loading products…</p></div>
+      <section class="section container" data-home>
+        <div class="section-head">
+          <div>
+            <h2>Shop by style</h2>
+            <p>Four silhouettes. Zero compromises.</p>
+          </div>
+        </div>
+        <div class="categories">
+          <a class="cat-tile" href="/?category=Biker"><img src="/img/cat-biker.webp" alt="" loading="lazy" /><span>Biker<small>Asymmetric zips</small></span></a>
+          <a class="cat-tile" href="/?category=Bomber"><img src="/img/cat-bomber.webp" alt="" loading="lazy" /><span>Bomber<small>Shearling &amp; aviator</small></span></a>
+          <a class="cat-tile" href="/?category=Caf%C3%A9%20Racer"><img src="/img/cat-cafe-racer.webp" alt="" loading="lazy" /><span>Café Racer<small>Clean &amp; minimal</small></span></a>
+          <a class="cat-tile" href="/?category=Suede"><img src="/img/cat-suede.webp" alt="" loading="lazy" /><span>Suede<small>Soft-touch classics</small></span></a>
+        </div>
+      </section>
+
+      <section class="section container" id="shop">
+        <div class="section-head">
+          <div>
+            <h2 id="shop-title">The drop</h2>
+            <p id="shop-sub">Every jacket, every style.</p>
+          </div>
+          <a href="/" class="link-arrow" id="shop-all" hidden>← All jackets</a>
+        </div>
+        <div class="filters" id="filters" role="group" aria-label="Filter by style"></div>
+        <div class="grid" id="grid"><p class="message">Loading jackets…</p></div>
+      </section>
+
+      <section class="split" data-home>
+        <div class="split-img" style="background-image:url('/img/editorial.webp')" role="img" aria-label="Shearling-lined leather jackets on a brick wall"></div>
+        <div class="split-text">
+          <span class="eyebrow">The aviator edit</span>
+          <h2>Built to be<br /><em>worn in.</em></h2>
+          <p>Heavyweight hides, shearling collars and hardware that gets better with every mile. These are jackets you keep for a decade.</p>
+          <a href="/?category=Bomber" class="btn btn-lg">Shop bombers</a>
+        </div>
+      </section>
+
+      <section class="container" data-home>
+        <div class="features">
+          <div class="feature"><strong>Free shipping</strong><span>On every order over $50.</span></div>
+          <div class="feature"><strong>Pick your size</strong><span>XS to XXL across most styles.</span></div>
+          <div class="feature"><strong>No payment online</strong><span>Order now, we'll contact you to arrange payment.</span></div>
+        </div>
+      </section>
     </main>
 
-    <footer class="site-footer">
-      <div class="container">© My Store · Powered by Cloudflare Workers</div>
-    </footer>
+    <div data-site-footer></div>
 
     <script type="module">
-      import { api, formatPrice, addToCart, toast, escapeHtml, thumb } from "/app.js";
+      import { api, formatPrice, escapeHtml, thumb, parseSizes } from "/app.js";
 
       const grid = document.getElementById("grid");
       const filters = document.getElementById("filters");
+      const params = new URLSearchParams(location.search);
+      let active = params.get("category") || "All";
       let all = [];
-      let active = "All";
+
+      // A category page skips the home-page banners and goes straight to the grid.
+      const isCategoryPage = active !== "All";
+      document.querySelectorAll("[data-home]").forEach((el) => (el.hidden = isCategoryPage));
+
+      function sizeRange(p) {
+        const s = parseSizes(p.sizes);
+        return s.length > 1 ? `${s[0]}–${s[s.length - 1]}` : s[0] || "";
+      }
+
+      function badge(p) {
+        if (p.stock === 0) return `<span class="card-badge soldout">Sold out</span>`;
+        if (p.stock <= 5) return `<span class="card-badge">Only ${p.stock} left</span>`;
+        return "";
+      }
 
       function render() {
         const list = active === "All" ? all : all.filter((p) => p.category === active);
-        grid.innerHTML = list
-          .map(
-            (p) => `
-          <article class="card">
-            <a href="/product?id=${p.id}">
+        document.getElementById("shop-title").textContent = active === "All" ? "The drop" : active;
+        document.getElementById("shop-sub").textContent = `${list.length} jacket${list.length === 1 ? "" : "s"}`;
+        document.getElementById("shop-all").hidden = active === "All";
+        document.title = active === "All" ? "Streetwear · Leather Jackets" : `${active} Jackets · Streetwear`;
+
+        grid.innerHTML = list.length
+          ? list
+              .map(
+                (p) => `
+            <a class="card" href="/product?id=${encodeURIComponent(p.id)}">
+              ${badge(p)}
               ${thumb(p)}
-            </a>
-            <div class="card-body">
-              <span class="category">${escapeHtml(p.category)}</span>
-              <h3><a href="/product?id=${p.id}">${escapeHtml(p.name)}</a></h3>
-              <div class="card-footer">
-                <span class="price">${formatPrice(p.price)}</span>
-                <button class="btn" data-id="${p.id}" ${p.stock === 0 ? "disabled" : ""}>
-                  ${p.stock === 0 ? "Sold out" : "Add"}
-                </button>
+              <div class="card-body">
+                <span class="category">${escapeHtml(p.category)}</span>
+                <h3>${escapeHtml(p.name)}</h3>
+                <div class="card-footer">
+                  <span class="price">${formatPrice(p.price)}</span>
+                  <span class="category">${escapeHtml(sizeRange(p))}</span>
+                </div>
               </div>
-            </div>
-          </article>`
-          )
-          .join("");
+            </a>`
+              )
+              .join("")
+          : `<p class="message" style="grid-column:1/-1">Nothing here yet.</p>`;
       }
 
       function renderFilters() {
@@ -75,16 +138,10 @@
         const cat = e.target.dataset.cat;
         if (!cat) return;
         active = cat;
+        const url = cat === "All" ? location.pathname + "#shop" : `/?category=${encodeURIComponent(cat)}`;
+        history.replaceState(null, "", url);
         renderFilters();
         render();
-      });
-
-      grid.addEventListener("click", (e) => {
-        const id = e.target.dataset.id;
-        if (!id) return;
-        const p = all.find((x) => x.id === id);
-        addToCart(id);
-        toast(`${p.name} added to cart`);
       });
 
       try {

@@ -4,13 +4,16 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="robots" content="noindex" />
-    <title>Products · My Store Admin</title>
+    <title>Products · Streetwear Admin</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
     <header class="site-header">
       <div class="container">
-        <a href="/admin" class="logo">My Store · Admin</a>
+        <a href="/admin" class="logo">Streetwear<span class="logo-dot">.</span> Admin</a>
         <nav class="nav">
           <a href="/admin/">Orders</a>
           <a href="/admin/products" class="active">Products</a>
@@ -135,6 +138,10 @@
                 <label for="f-stock">Stock</label>
                 <input id="f-stock" name="stock" type="number" min="0" step="1" required value="${p.stock ?? 0}" />
               </div>
+            </div>
+            <div class="field">
+              <label for="f-sizes">Sizes <span class="optional">(comma-separated, e.g. S, M, L, XL. Leave empty for one-size items)</span></label>
+              <input id="f-sizes" name="sizes" maxlength="200" placeholder="XS, S, M, L, XL" value="${escapeHtml(p.sizes || "")}" />
             </div>
             <div class="field">
               <label for="f-description">Description</label>
@@ -274,6 +281,7 @@
             category: data.category,
             price: Math.round(parseFloat(data.price) * 100),
             stock: parseInt(data.stock, 10),
+            sizes: data.sizes,
             description: data.description,
             emoji: data.emoji,
             color: data.color,

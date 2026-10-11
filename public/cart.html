@@ -3,23 +3,18 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Cart · My Store</title>
+    <title>Cart · Streetwear</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
-    <header class="site-header">
-      <div class="container">
-        <a href="/" class="logo">My Store</a>
-        <nav class="nav">
-          <a href="/">Shop</a>
-          <a href="/cart" class="cart-link active">Cart<span class="cart-count"></span></a>
-        </nav>
-      </div>
-    </header>
+    <div data-site-header></div>
 
     <main class="container">
       <section class="cart" id="cart">
-        <h1>Your cart</h1>
+        <h1 class="page-title">Your cart</h1>
         <div class="cart-main">
           <div class="cart-items" id="items"><p class="message">Loading…</p></div>
 
@@ -64,12 +59,10 @@
       </section>
     </main>
 
-    <footer class="site-footer">
-      <div class="container">© My Store · Powered by Cloudflare Workers</div>
-    </footer>
+    <div data-site-footer></div>
 
     <script type="module">
-      import { api, formatPrice, getCart, saveCart, escapeHtml, thumb } from "/app.js";
+      import { api, formatPrice, getCart, saveCart, escapeHtml, thumb, parseSizes } from "/app.js";
 
       const root = document.getElementById("cart");
       const itemsEl = document.getElementById("items");
@@ -80,12 +73,17 @@
       let catalog = {};
 
       function render() {
-        // Drop anything that's no longer in the catalog.
-        const cart = getCart().filter((l) => catalog[l.id]);
+        // Drop anything that's no longer in the catalog, or whose size no longer exists.
+        const cart = getCart().filter((l) => {
+          const p = catalog[l.id];
+          if (!p) return false;
+          const sizes = parseSizes(p.sizes);
+          return sizes.length ? sizes.includes(l.size) : !l.size;
+        });
         saveCart(cart);
 
         if (cart.length === 0) {
-          itemsEl.innerHTML = `<div class="empty"><p>Your cart is empty.</p><a class="btn btn-lg" href="/">Start shopping</a></div>`;
+          itemsEl.innerHTML = `<div class="empty"><p>Your cart is empty.</p><a class="btn btn-lg" href="/#shop">Shop the drop</a></div>`;
           form.hidden = true;
           summaryEl.hidden = true;
           return;
@@ -94,21 +92,26 @@
         const subtotal = cart.reduce((s, l) => s + catalog[l.id].price * l.qty, 0);
         const shipping = subtotal >= FREE_SHIPPING_OVER ? 0 : SHIPPING_FLAT;
 
+        // Stock is shared across sizes, so compare against the product's total in the cart.
+        const qtyByProduct = {};
+        for (const l of cart) qtyByProduct[l.id] = (qtyByProduct[l.id] || 0) + l.qty;
+
         itemsEl.innerHTML = cart
           .map((l) => {
             const p = catalog[l.id];
-            const low = l.qty > p.stock;
+            const key = escapeHtml(`${l.id}|${l.size}`);
+            const low = qtyByProduct[l.id] > p.stock;
             return `
             <div class="cart-item">
               ${thumb(p)}
               <div>
-                <a href="/product?id=${p.id}"><strong>${escapeHtml(p.name)}</strong></a>
-                <div class="hint">${formatPrice(p.price)} each</div>
+                <a href="/product?id=${encodeURIComponent(p.id)}"><strong>${escapeHtml(p.name)}</strong></a>
+                <div class="hint">${l.size ? `Size ${escapeHtml(l.size)} · ` : ""}${formatPrice(p.price)} each</div>
                 ${low ? `<div class="hint" style="color:var(--danger)">${p.stock === 0 ? "Sold out" : `Only ${p.stock} left`}</div>` : ""}
               </div>
               <div style="display:flex;gap:4px;align-items:center">
-                <input class="qty" type="number" min="1" max="10" value="${l.qty}" data-qty="${p.id}" aria-label="Quantity for ${escapeHtml(p.name)}" />
-                <button type="button" class="btn btn-ghost" data-remove="${p.id}" aria-label="Remove ${escapeHtml(p.name)}">✕</button>
+                <input class="qty" type="number" min="1" max="10" value="${l.qty}" data-qty="${key}" aria-label="Quantity for ${escapeHtml(p.name)}" />
+                <button type="button" class="btn btn-ghost" data-remove="${key}" aria-label="Remove ${escapeHtml(p.name)}">✕</button>
               </div>
               <strong class="line-total">${formatPrice(p.price * l.qty)}</strong>
             </div>`;
@@ -129,17 +132,17 @@
       }
 
       root.addEventListener("change", (e) => {
-        const id = e.target.dataset.qty;
-        if (!id) return;
+        const key = e.target.dataset.qty;
+        if (!key) return;
         const qty = Math.max(1, Math.min(10, parseInt(e.target.value, 10) || 1));
-        saveCart(getCart().map((l) => (l.id === id ? { ...l, qty } : l)));
+        saveCart(getCart().map((l) => (`${l.id}|${l.size}` === key ? { ...l, qty } : l)));
         render();
       });
 
       root.addEventListener("click", (e) => {
-        const removeId = e.target.dataset.remove;
-        if (!removeId) return;
-        saveCart(getCart().filter((l) => l.id !== removeId));
+        const removeKey = e.target.dataset.remove;
+        if (!removeKey) return;
+        saveCart(getCart().filter((l) => `${l.id}|${l.size}` !== removeKey));
         render();
       });
 
@@ -169,7 +172,7 @@
           saveCart([]);
           root.innerHTML = `
             <div class="order-done">
-              <h2>Thank you, your order is placed!</h2>
+              <h2>Order placed!</h2>
               <p>Order number <strong>${escapeHtml(order.orderId)}</strong></p>
               <p>Total ${formatPrice(order.total)}</p>
               <p class="hint">We'll contact you at ${escapeHtml(order.email)} when it ships.</p>

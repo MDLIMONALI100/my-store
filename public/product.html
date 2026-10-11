@@ -3,65 +3,93 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Product · My Store</title>
+    <title>Jacket · Streetwear</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
-    <header class="site-header">
-      <div class="container">
-        <a href="/" class="logo">My Store</a>
-        <nav class="nav">
-          <a href="/">Shop</a>
-          <a href="/cart" class="cart-link">Cart<span class="cart-count"></span></a>
-        </nav>
-      </div>
-    </header>
+    <div data-site-header></div>
 
     <main class="container" id="main"><p class="message">Loading…</p></main>
 
-    <footer class="site-footer">
-      <div class="container">© My Store · Powered by Cloudflare Workers</div>
-    </footer>
+    <div data-site-footer></div>
 
     <script type="module">
-      import { api, formatPrice, addToCart, toast, escapeHtml, thumb } from "/app.js";
+      import { api, formatPrice, addToCart, toast, escapeHtml, thumb, parseSizes } from "/app.js";
 
       const main = document.getElementById("main");
       const id = new URLSearchParams(location.search).get("id");
+      let selectedSize = "";
 
       try {
         if (!id) throw new Error("No product selected.");
         const { product: p } = await api(`/api/products/${encodeURIComponent(id)}`);
-        document.title = `${p.name} · My Store`;
+        document.title = `${p.name} · Streetwear`;
+        const sizes = parseSizes(p.sizes);
         const inStock = p.stock > 0;
+        const stockClass = !inStock ? "out" : p.stock <= 5 ? "low" : "in";
+        const stockText = !inStock ? "Sold out" : p.stock <= 5 ? `Only ${p.stock} left` : "In stock";
+        if (sizes.length === 1) selectedSize = sizes[0];
 
         main.innerHTML = `
-          <a href="/" class="back">← Back to shop</a>
+          <nav class="breadcrumbs" aria-label="Breadcrumb">
+            <a href="/">Shop</a> / <a href="/?category=${encodeURIComponent(p.category)}">${escapeHtml(p.category)}</a> / ${escapeHtml(p.name)}
+          </nav>
           <section class="product">
             ${thumb(p)}
-            <div>
+            <div class="product-info">
               <span class="category">${escapeHtml(p.category)}</span>
               <h1>${escapeHtml(p.name)}</h1>
               <p class="price">${formatPrice(p.price)}</p>
+              <p class="stock ${stockClass}">${stockText}</p>
               <p class="desc">${escapeHtml(p.description)}</p>
-              <p class="stock ${inStock ? "in" : "out"}">
-                ${inStock ? `In stock (${p.stock} available)` : "Sold out"}
-              </p>
+
+              ${
+                sizes.length
+                  ? `<div class="size-label">Size <span id="size-picked">${selectedSize ? `Selected: ${escapeHtml(selectedSize)}` : "Choose a size"}</span></div>
+                     <div class="sizes" id="sizes" role="group" aria-label="Choose a size">
+                       ${sizes.map((s) => `<button type="button" class="size-btn" data-size="${escapeHtml(s)}" aria-pressed="${s === selectedSize}" ${inStock ? "" : "disabled"}>${escapeHtml(s)}</button>`).join("")}
+                     </div>
+                     <p class="size-error" id="size-error" role="alert"></p>`
+                  : ""
+              }
+
               <div class="qty-row">
                 <label for="qty" class="visually-hidden">Quantity</label>
-                <input id="qty" class="qty" type="number" min="1" max="${Math.min(10, p.stock)}" value="1" ${inStock ? "" : "disabled"} />
-                <button class="btn btn-lg" id="add" ${inStock ? "" : "disabled"}>Add to cart</button>
+                <input id="qty" class="qty" type="number" min="1" max="${Math.max(1, Math.min(10, p.stock))}" value="1" ${inStock ? "" : "disabled"} />
+                <button class="btn btn-lg" id="add" ${inStock ? "" : "disabled"}>${inStock ? "Add to cart" : "Sold out"}</button>
               </div>
+
+              <ul class="perks">
+                <li><strong>Free shipping</strong> on orders over $50</li>
+                <li><strong>No payment online.</strong> We'll contact you to arrange it.</li>
+              </ul>
             </div>
           </section>`;
 
-        document.getElementById("add")?.addEventListener("click", () => {
+        document.getElementById("sizes")?.addEventListener("click", (e) => {
+          const s = e.target.dataset.size;
+          if (s === undefined) return;
+          selectedSize = s;
+          document.querySelectorAll(".size-btn").forEach((b) => b.setAttribute("aria-pressed", b.dataset.size === s));
+          document.getElementById("size-picked").textContent = `Selected: ${s}`;
+          document.getElementById("size-error").textContent = "";
+        });
+
+        document.getElementById("add").addEventListener("click", () => {
+          if (sizes.length && !selectedSize) {
+            document.getElementById("size-error").textContent = "Please choose a size first.";
+            document.getElementById("sizes").querySelector("button")?.focus();
+            return;
+          }
           const qty = Math.max(1, Math.min(10, parseInt(document.getElementById("qty").value, 10) || 1));
-          addToCart(p.id, qty);
-          toast(`${qty} × ${p.name} added to cart`);
+          addToCart(p.id, qty, selectedSize);
+          toast(`${qty} × ${p.name}${selectedSize ? ` (${selectedSize})` : ""} added`);
         });
       } catch (err) {
-        main.innerHTML = `<p class="message error">${escapeHtml(err.message)}</p><p class="message"><a href="/">← Back to shop</a></p>`;
+        main.innerHTML = `<p class="message error">${escapeHtml(err.message)}</p><p class="message"><a href="/" class="link-arrow">← Back to shop</a></p>`;
       }
     </script>
   </body>

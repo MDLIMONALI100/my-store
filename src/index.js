@@ -59,7 +59,7 @@ async function handlePublicApi(request, env, url, path) {
   return json({ error: "Not found" }, 404);
 }
 
-const PRODUCT_COLS = `id, name, category, price, emoji, color, description, stock,
+const PRODUCT_COLS = `id, name, category, price, emoji, color, description, stock, sizes,
   CASE WHEN image_id IS NULL THEN NULL ELSE '/images/' || image_id END AS image_url`;
 
 // Image IDs are random and never reused (a new upload gets a new ID), so
@@ -97,34 +97,45 @@ async function checkout(request, env) {
   const customer = validateCustomer(body?.customer);
   if (customer.error) return json({ error: customer.error }, 400);
 
-  // Merge duplicate lines and validate quantities.
+  // Merge duplicate lines (same product and size) and validate quantities.
   const rawItems = Array.isArray(body?.items) ? body.items : [];
-  const qtyById = new Map();
+  const qtyByLine = new Map(); // "id|size" -> qty
   for (const item of rawItems) {
     const id = typeof item?.id === "string" ? item.id : "";
+    const size = typeof item?.size === "string" ? item.size.trim() : "";
     const qty = Number(item?.qty);
     if (!id || !Number.isInteger(qty) || qty < 1) return json({ error: "Invalid cart item" }, 400);
-    qtyById.set(id, (qtyById.get(id) || 0) + qty);
+    const key = `${id}|${size}`;
+    qtyByLine.set(key, (qtyByLine.get(key) || 0) + qty);
   }
-  if (qtyById.size === 0) return json({ error: "Your cart is empty" }, 400);
+  if (qtyByLine.size === 0) return json({ error: "Your cart is empty" }, 400);
 
   // Prices always come from the database, never from the browser.
-  const ids = [...qtyById.keys()];
+  const ids = [...new Set([...qtyByLine.keys()].map((k) => k.split("|")[0]))];
   const { results: rows } = await env.DB.prepare(
-    `SELECT id, name, price, stock FROM products WHERE hidden = 0 AND id IN (${ids.map(() => "?").join(",")})`
+    `SELECT id, name, price, stock, sizes FROM products WHERE hidden = 0 AND id IN (${ids.map(() => "?").join(",")})`
   )
     .bind(...ids)
     .all();
   const byId = new Map(rows.map((r) => [r.id, r]));
 
   const lines = [];
-  for (const [id, qty] of qtyById) {
+  const qtyById = new Map(); // stock is tracked per product, across all sizes
+  for (const [key, qty] of qtyByLine) {
+    const [id, size] = key.split("|");
     const p = byId.get(id);
     if (!p) return json({ error: "An item in your cart is no longer available" }, 400);
+    const sizes = parseSizes(p.sizes);
+    if (sizes.length && !sizes.includes(size)) return json({ error: `Please choose a size for ${p.name}` }, 400);
+    if (!sizes.length && size) return json({ error: `${p.name} doesn't come in sizes` }, 400);
     if (qty > MAX_QTY) return json({ error: `You can order up to ${MAX_QTY} of ${p.name}` }, 400);
+    qtyById.set(id, (qtyById.get(id) || 0) + qty);
+    lines.push({ product_id: id, size, name: p.name, unit_price: p.price, qty, line_total: p.price * qty });
+  }
+  for (const [id, qty] of qtyById) {
+    const p = byId.get(id);
     if (p.stock === 0) return json({ error: `${p.name} is sold out` }, 409);
     if (qty > p.stock) return json({ error: `Only ${p.stock} ${p.name} left in stock` }, 409);
-    lines.push({ product_id: id, name: p.name, unit_price: p.price, qty, line_total: p.price * qty });
   }
 
   const subtotal = lines.reduce((s, l) => s + l.line_total, 0);
@@ -143,10 +154,10 @@ async function checkout(request, env) {
     ).bind(orderId, c.name, c.email, c.phone, c.address1, c.address2, c.city, c.postalCode, c.country, subtotal, shipping, total),
     ...lines.map((l) =>
       env.DB.prepare(
-        `INSERT INTO order_items (order_id, product_id, name, unit_price, qty, line_total) VALUES (?, ?, ?, ?, ?, ?)`
-      ).bind(orderId, l.product_id, l.name, l.unit_price, l.qty, l.line_total)
+        `INSERT INTO order_items (order_id, product_id, size, name, unit_price, qty, line_total) VALUES (?, ?, ?, ?, ?, ?, ?)`
+      ).bind(orderId, l.product_id, l.size, l.name, l.unit_price, l.qty, l.line_total)
     ),
-    ...lines.map((l) => env.DB.prepare(`UPDATE products SET stock = stock - ? WHERE id = ?`).bind(l.qty, l.product_id)),
+    ...[...qtyById].map(([id, qty]) => env.DB.prepare(`UPDATE products SET stock = stock - ? WHERE id = ?`).bind(qty, id)),
   ];
 
   try {
@@ -159,6 +170,11 @@ async function checkout(request, env) {
   }
 
   return json({ orderId, total, email: c.email }, 201);
+}
+
+// "S, M,L ,, XL" -> ["S", "M", "L", "XL"]
+function parseSizes(value) {
+  return [...new Set(String(value || "").split(",").map((s) => s.trim()).filter(Boolean))];
 }
 
 function validateCustomer(input) {
@@ -280,7 +296,7 @@ async function handleAdminApi(request, env, path) {
       statements.push(
         env.DB.prepare(
           `UPDATE products
-           SET stock = stock + (SELECT qty FROM order_items WHERE order_id = ?1 AND product_id = products.id)
+           SET stock = stock + (SELECT SUM(qty) FROM order_items WHERE order_id = ?1 AND product_id = products.id)
            WHERE id IN (SELECT product_id FROM order_items WHERE order_id = ?1)
              AND EXISTS (SELECT 1 FROM orders WHERE id = ?1 AND status != 'cancelled')`
         ).bind(match[1])
@@ -333,10 +349,10 @@ async function handleAdminProducts(request, env, path) {
 
     const id = await uniqueSlug(env, p.name);
     await env.DB.prepare(
-      `INSERT INTO products (id, name, category, price, emoji, color, description, stock, image_id, hidden, sort_order, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM products), strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))`
+      `INSERT INTO products (id, name, category, price, emoji, color, description, stock, image_id, sizes, hidden, sort_order, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM products), strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))`
     )
-      .bind(id, p.name, p.category, p.price, p.emoji, p.color, p.description, p.stock, p.imageId, p.hidden)
+      .bind(id, p.name, p.category, p.price, p.emoji, p.color, p.description, p.stock, p.imageId, p.sizes, p.hidden)
       .run();
     return json({ product: await getAdminProduct(env, id) }, 201);
   }
@@ -360,9 +376,9 @@ async function handleAdminProducts(request, env, path) {
     const statements = [
       env.DB.prepare(
         `UPDATE products SET name = ?, category = ?, price = ?, emoji = ?, color = ?, description = ?, stock = ?,
-                image_id = ?, hidden = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
+                image_id = ?, sizes = ?, hidden = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
          WHERE id = ?`
-      ).bind(p.name, p.category, p.price, p.emoji, p.color, p.description, p.stock, p.imageId, p.hidden, id),
+      ).bind(p.name, p.category, p.price, p.emoji, p.color, p.description, p.stock, p.imageId, p.sizes, p.hidden, id),
     ];
     // Remove the old photo when it's replaced or removed.
     if (existing.image_id && existing.image_id !== p.imageId) {
@@ -393,6 +409,7 @@ async function validateProduct(env, input) {
   const price = Number(input?.price);
   const stock = Number(input?.stock);
   const imageId = input?.imageId ? String(input.imageId) : null;
+  const sizes = parseSizes(typeof input?.sizes === "string" ? input.sizes : "").map((x) => x.slice(0, 12)).slice(0, 20);
 
   if (name.length < 2) return { error: "Name must be at least 2 characters" };
   if (!category) return { error: "Please enter a category" };
@@ -404,7 +421,9 @@ async function validateProduct(env, input) {
     if (!img) return { error: "Image not found. Please upload it again." };
   }
 
-  return { value: { name, category, description, emoji, color, price, stock, imageId, hidden: input?.hidden ? 1 : 0 } };
+  return {
+    value: { name, category, description, emoji, color, price, stock, imageId, sizes: sizes.join(","), hidden: input?.hidden ? 1 : 0 },
+  };
 }
 
 // "Classic Tee" -> "classic-tee", or "classic-tee-2" if that's taken.
@@ -438,7 +457,7 @@ async function getOrder(env, id) {
   const order = await env.DB.prepare(`SELECT * FROM orders WHERE id = ?`).bind(id).first();
   if (!order) return null;
   const { results: items } = await env.DB.prepare(
-    `SELECT product_id, name, unit_price, qty, line_total FROM order_items WHERE order_id = ? ORDER BY name`
+    `SELECT product_id, size, name, unit_price, qty, line_total FROM order_items WHERE order_id = ? ORDER BY name, size`
   )
     .bind(id)
     .all();

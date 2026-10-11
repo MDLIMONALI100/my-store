@@ -4,13 +4,16 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="robots" content="noindex" />
-    <title>Orders · My Store Admin</title>
+    <title>Orders · Streetwear Admin</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
     <header class="site-header">
       <div class="container">
-        <a href="/admin" class="logo">My Store · Admin</a>
+        <a href="/admin" class="logo">Streetwear<span class="logo-dot">.</span> Admin</a>
         <nav class="nav">
           <a href="/admin/" class="active">Orders</a>
           <a href="/admin/products">Products</a>
@@ -126,7 +129,7 @@
 
           <h3>Items</h3>
           ${o.items
-            .map((i) => `<div class="row"><span>${i.qty} × ${escapeHtml(i.name)}</span><span>${formatPrice(i.line_total)}</span></div>`)
+            .map((i) => `<div class="row"><span>${i.qty} × ${escapeHtml(i.name)}${i.size ? ` <strong>(${escapeHtml(i.size)})</strong>` : ""}</span><span>${formatPrice(i.line_total)}</span></div>`)
             .join("")}
           <div class="row" style="margin-top:10px"><span>Subtotal</span><span>${formatPrice(o.subtotal)}</span></div>
           <div class="row"><span>Shipping</span><span>${o.shipping === 0 ? "Free" : formatPrice(o.shipping)}</span></div>
