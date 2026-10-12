@@ -9,9 +9,14 @@ function Badge({ stock }) {
   return null;
 }
 
-export default function ProductCard({ p }) {
+export default function ProductCard({ p, index = 0 }) {
   return (
-    <Link className="card" href={`/product?id=${encodeURIComponent(p.id)}`}>
+    <Link
+      className="card"
+      href={`/product?id=${encodeURIComponent(p.id)}`}
+      data-reveal="zoom"
+      style={{ "--i": index % 4 }} // staggers the cards in each row
+    >
       <Badge stock={p.stock} />
       <Thumb p={p} />
       <div className="card-body">

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import ProductCard from "./ProductCard";
+import SplitText from "./SplitText";
 import { SITE } from "@/lib/helpers";
 import { serverApi } from "@/lib/api";
 
@@ -30,7 +31,7 @@ export default async function ShopGrid({ active }) {
     <section className="section container" id="shop">
       <div className="section-head">
         <div>
-          <h2 id="shop-title">{active === "All" ? SITE.shop_title : active}</h2>
+          <SplitText as="h2" text={active === "All" ? SITE.shop_title : active} />
           <p id="shop-sub">
             {list.length} jacket{list.length === 1 ? "" : "s"}
           </p>
@@ -55,7 +56,7 @@ export default async function ShopGrid({ active }) {
       </div>
       <div className="grid">
         {list.length ? (
-          list.map((p) => <ProductCard key={p.id} p={p} />)
+          list.map((p, i) => <ProductCard key={p.id} p={p} index={i} />)
         ) : (
           <p className="message" style={{ gridColumn: "1/-1" }}>
             Nothing here yet.
