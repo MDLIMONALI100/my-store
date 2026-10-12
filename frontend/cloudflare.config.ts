@@ -3,7 +3,7 @@ import { bindings, defineConfig, defineWorker } from "cf/config";
 export default defineConfig({
   worker: defineWorker({
     name: "my-store-next",
-    entrypoint: "vinext/server/fetch-handler",
+    entrypoint: "./worker/index.js",
     compatibilityDate: "2026-10-12",
     compatibilityFlags: ["nodejs_compat"],
     assets: { notFoundHandling: "none" },

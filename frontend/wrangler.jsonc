@@ -1,0 +1,16 @@
+{
+  // Deploys the storefront that `vite build` produced (see package.json "deploy:live").
+  // This is the live storefront (https://my-store.mdlimonali.workers.dev).
+  "name": "my-store",
+  "main": ".cloudflare/output/v0/workers/default/bundle/index.js",
+  "compatibility_date": "2026-10-12",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": ".cloudflare/output/v0/workers/default/assets",
+    "binding": "ASSETS",
+    "not_found_handling": "none"
+  },
+  // Direct connection to the API worker (see worker/index.js).
+  "services": [{ "binding": "API", "service": "my-store-api" }],
+  "observability": { "enabled": true }
+}

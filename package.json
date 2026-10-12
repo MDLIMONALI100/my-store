@@ -6,7 +6,12 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "wrangler dev",
-    "deploy": "wrangler deploy"
+    "deploy:old-site": "wrangler deploy",
+    "deploy": "npm --prefix backend run deploy && npm --prefix frontend run deploy:live",
+    "deploy:api": "npm --prefix backend run deploy",
+    "deploy:web": "npm --prefix frontend run deploy:live",
+    "dev:api": "npm --prefix backend run dev",
+    "dev:web": "npm --prefix frontend run dev"
   },
   "keywords": [],
   "author": "",

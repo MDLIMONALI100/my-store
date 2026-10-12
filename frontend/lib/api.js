@@ -4,7 +4,12 @@
 const API_ORIGIN = process.env.API_URL || "http://localhost:8788";
 
 export async function serverApi(path, { revalidate } = {}) {
-  const res = await fetch(`${API_ORIGIN}${path}`, revalidate ? { next: { revalidate } } : { cache: "no-store" });
+  // On Cloudflare the worker entry (worker/index.js) provides a direct connection to the API
+  // worker; locally we fall back to plain HTTP.
+  const direct = globalThis.__SW_API;
+  const res = direct
+    ? await direct.fetch(new Request(`https://api.internal${path}`, { headers: { "x-forwarded-proto": "https" } }))
+    : await fetch(`${API_ORIGIN}${path}`, revalidate ? { next: { revalidate } } : { cache: "no-store" });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     const err = new Error(data.error || `Request failed (${res.status})`);

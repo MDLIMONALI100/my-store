@@ -2,6 +2,18 @@
 
 Existing project, already live. The owner is learning, so explain things simply and show where code lives. Never print secret values or ask the owner to paste them in chat.
 
+## >>> LIVE SINCE 2026-10-12: the store runs the NEW architecture (read this first) <<<
+The sections below titled "What it is / Architecture / Key files / Workflow" describe the OLD single-Worker site (`src/`, `public/`), which is no longer what is live. Current reality:
+- **Storefront** = Next.js (`frontend/`) running on Cloudflare Workers via vinext, deployed as worker **`my-store`** at https://my-store.mdlimonali.workers.dev. Entry wrapper `frontend/worker/index.js` forwards `/api/*` and `/images/*` to the API worker over a service binding (`API`), because a Worker cannot call another workers.dev URL. Config: `frontend/wrangler.jsonc`.
+- **API** = Express on Workers (`backend/`), worker **`my-store-api`** at https://my-store-api.mdlimonali.workers.dev. D1 `my-store-db` + MongoDB `streetwear` (reviews). Secrets set on this worker: ADMIN_PASSWORD, MONGODB_URI, MONGODB_DB (= streetwear). The live ADMIN_PASSWORD equals the one in local `.dev.vars`.
+- **Admin** = https://my-store.mdlimonali.workers.dev/admin (login page, cookie session). Basic Auth still works on `/api/admin/*` for scripts.
+- **Deploy**: `npm run deploy` from the project root (API then storefront). `npm run deploy:api` / `npm run deploy:web` deploy one half. `deploy:old-site` redeploys the OLD site (only for rollback; it overwrites the new storefront!).
+- **DB migrations**: `npm --prefix backend run migrate:remote` (0006-0008 are applied on live). A backup from before is in `backups/` (git-ignored).
+- **Rollback to the old site**: `npx wrangler rollback 4d80318a-0aab-4eb7-be9f-6022c6968863 --name my-store` (old storefront version id). The old tables/data are untouched.
+- **Catalog**: 200 demo products seeded with `scripts/catalog/seed.mjs <api-url>` (needs ADMIN_PASSWORD env). The 8 old demo products are hidden, not deleted.
+- The `cf` CLI used by `vinext init` needs its own login; deploys use `wrangler` (already logged in) instead.
+- Local dev: `npm run dev:api` (:8788) + `npm run dev:web` (:3000). Local DB state is shared via `--persist-to ../.wrangler/state`.
+
 ## Where everything is
 - Local folder: ~/my-store
 - Live site: https://my-store.mdlimonali.workers.dev
@@ -31,8 +43,7 @@ A demo online store (no online payment) on Cloudflare Workers with static assets
 - `scripts/seed-jackets.mjs` + `seed/jackets/*.webp`: seeds the 16 jackets through the admin API. `seed/PHOTO_CREDITS.md` lists the Unsplash sources.
 - `wrangler.jsonc`: assets, `run_worker_first` for `/api/*`, `/admin*`, `/` and the storefront pages, D1 binding, observability.
 
-## Migration to Next.js + Express (branch `nextjs-migration`, NOT live yet)
-The live site is still the old Worker (`src/` + `public/`). A rebuild is in progress on the branch `nextjs-migration`; nothing from it is deployed until the owner approves a phase.
+## Next.js + Express architecture (now live; built on branch `nextjs-migration`, merged to main)
 - `frontend/`: Next.js (App Router, plain JS). Light editorial design (tokens at top of `frontend/app/globals.css`), Lenis smooth scroll, scroll/text reveal animations (`data-reveal`, `SplitText`). Components in `frontend/components/`. Browser calls to `/api/*` and `/images/*` are proxied to the API (`frontend/next.config.mjs`, env `API_URL`, default http://localhost:8788).
 - `backend/`: Express 5 running on a Cloudflare Worker (`my-store-api`, `httpServerHandler` from `cloudflare:node`, `nodejs_compat`). Same D1 database (`DB`) and MongoDB (reviews). Env/secrets via `import { env } from "cloudflare:workers"`. Public routes `backend/src/routes/`, admin routes (Basic Auth) `backend/src/admin/`. `.dev.vars` is a copy of the root one (git-ignored).
 - Migration `migrations/0006_storefront_v2.sql` adds categories, product extras (sale price, colour, tabs, badge, featured/new), product_images, menus, pages, home_sections, outfits, subscribers, contact_messages and starter content. Applied LOCALLY only; apply `--remote` before deploying.
@@ -42,7 +53,7 @@ The live site is still the old Worker (`src/` + `public/`). A rebuild is in prog
 - Done so far on the branch: Phase 1 design system (light, `frontend/app/globals.css` + `shop.css`), Phase 2 Express API, Phase 3 catalog (200 products via `scripts/catalog/{download,build,seed}.mjs`; generated photos in git-ignored `seed/catalog/`), Phase 4 storefront pages (home sections from `/api/home`, `/shop`, `/shop/[category]`, `/product/[id]`, `/checkout`, `/outfits`, content pages `/[slug]`, `/account`, `/wishlist`, search), customer accounts (migration 0007), Phase 5 admin at `/admin` (own login via cookie `sw_admin`, migration 0008; screens in `frontend/app/(admin)/admin/(panel)/`, kit in `frontend/components/admin/`).
 - Route groups: `app/(shop)/` has the storefront layout (header/footer/cart); `app/(admin)/admin/` has the admin layout. Root `app/layout.js` only does fonts + theme.
 - Settings/menus are cached 10 s by the storefront (`lib/site.js`); first view after that refreshes it.
-- Still to do: Phase 6 (outfit ideas polish + 3D 360 viewer, `Viewer360.js` is a stub, needs R2 for big .glb files), then deploy (OpenNext/vinext for Next on Workers; `wrangler deploy` for the API; apply migrations 0006-0008 with --remote; run catalog seed against the live API). Nothing from this branch is live yet.
+- Phase 6 done: `frontend/components/Viewer360.js` + `lib/mannequin.js` (Three.js mannequin recoloured per outfit; a real .glb can be set in Admin > Settings > 360 viewer by address). Large .glb upload (R2) is not built.
 
 ## Workflow
 - Preview locally: `npm run dev` (http://localhost:8787). It uses a local D1 and the dev Mongo database, both holding test data.
