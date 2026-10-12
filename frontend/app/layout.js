@@ -1,4 +1,8 @@
+import { Suspense } from "react";
 import "./globals.css";
+import { CartProvider } from "@/components/CartProvider";
+import Header from "@/components/Header";
+import Footer from "@/components/Footer";
 
 export const metadata = {
   title: "Streetwear · Leather Jackets",
@@ -17,7 +21,16 @@ export default function RootLayout({ children }) {
           rel="stylesheet"
         />
       </head>
-      <body>{children}</body>
+      <body>
+        <CartProvider>
+          {/* Header reads the URL (for the highlighted nav link), so it needs Suspense */}
+          <Suspense fallback={null}>
+            <Header />
+          </Suspense>
+          {children}
+          <Footer />
+        </CartProvider>
+      </body>
     </html>
   );
 }
