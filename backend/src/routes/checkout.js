@@ -3,6 +3,7 @@
 import { Router } from "express";
 import { db, httpError, isEmail, parseSizes } from "../lib/util.js";
 import { getSettings } from "../lib/settings.js";
+import { getCustomer } from "../lib/customers.js";
 
 const MAX_QTY = 10;
 const router = Router();
@@ -77,6 +78,7 @@ router.post("/checkout", async (req, res) => {
   const subtotal = lines.reduce((s, l) => s + l.line_total, 0);
   const shipping = subtotal >= free_shipping_over ? 0 : shipping_flat;
   const total = subtotal + shipping;
+  const customer = await getCustomer(req); // orders placed while signed in show up in My Account
   const orderId = "ORD-" + crypto.randomUUID().replace(/-/g, "").slice(0, 10).toUpperCase();
 
   // One transaction: save the order, its items, and reduce stock. If another shopper
@@ -84,10 +86,10 @@ router.post("/checkout", async (req, res) => {
   const statements = [
     db()
       .prepare(
-        `INSERT INTO orders (id, customer_name, email, phone, address_line1, address_line2, city, postal_code, country, subtotal, shipping, total)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        `INSERT INTO orders (id, customer_name, email, phone, address_line1, address_line2, city, postal_code, country, subtotal, shipping, total, customer_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
-      .bind(orderId, c.name, c.email, c.phone, c.address1, c.address2, c.city, c.postalCode, c.country, subtotal, shipping, total),
+      .bind(orderId, c.name, c.email, c.phone, c.address1, c.address2, c.city, c.postalCode, c.country, subtotal, shipping, total, customer?.id ?? null),
     ...lines.map((l) =>
       db()
         .prepare(`INSERT INTO order_items (order_id, product_id, size, name, unit_price, qty, line_total) VALUES (?, ?, ?, ?, ?, ?, ?)`)

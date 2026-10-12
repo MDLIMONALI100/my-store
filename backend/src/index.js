@@ -6,6 +6,7 @@ import { httpServerHandler } from "cloudflare:node";
 import { requireAdmin } from "./lib/auth.js";
 import publicRoutes, { serveImage } from "./routes/public.js";
 import checkoutRoutes from "./routes/checkout.js";
+import accountRoutes from "./routes/account.js";
 import adminProducts from "./admin/products.js";
 import adminOrders from "./admin/orders.js";
 import adminContent from "./admin/content.js";
@@ -26,6 +27,7 @@ app.use("/api", (req, res, next) => {
 app.get("/images/:id", serveImage);
 
 app.use("/api/admin", requireAdmin, adminProducts, adminOrders, adminContent, adminMisc);
+app.use("/api/account", accountRoutes);
 app.use("/api", publicRoutes, checkoutRoutes);
 
 app.use((req, res) => res.status(404).json({ error: "Not found" }));
