@@ -3,7 +3,7 @@ import { Router } from "express";
 import { db, getEnv, httpError } from "../lib/util.js";
 import { SETTINGS_DEFAULTS, getSettings, saveSettings } from "../lib/settings.js";
 import { withMongo } from "../mongo.js";
-import { listReviews, moderateReview } from "../reviews.js";
+import { listReviews, moderateReview, reviewCounts } from "../reviews.js";
 
 const router = Router();
 
@@ -23,6 +23,56 @@ router.get("/mongo-health", async (req, res) => {
     const error = String(err?.message || err).replace(/mongodb(\+srv)?:\/\/[^\s]+/g, "[connection string]");
     res.status(502).json({ ok: false, ms: Date.now() - started, error });
   }
+});
+
+// ---------- Dashboard ----------
+
+router.get("/stats", async (req, res) => {
+  const [orders, revenue, products, customers, subs, messages, recent] = await db().batch([
+    db().prepare(`SELECT status, COUNT(*) AS n FROM orders GROUP BY status`),
+    db().prepare(`SELECT COALESCE(SUM(total), 0) AS total, COUNT(*) AS n FROM orders WHERE status != 'cancelled'`),
+    db().prepare(
+      `SELECT COUNT(*) AS total,
+              SUM(hidden = 1) AS hidden,
+              SUM(hidden = 0 AND stock = 0) AS out_of_stock,
+              SUM(hidden = 0 AND stock > 0 AND stock <= 5) AS low_stock
+       FROM products`
+    ),
+    db().prepare(`SELECT COUNT(*) AS n FROM customers`),
+    db().prepare(`SELECT COUNT(*) AS n FROM subscribers`),
+    db().prepare(`SELECT COUNT(*) AS n FROM contact_messages WHERE is_read = 0`),
+    db().prepare(`SELECT id, created_at, status, customer_name, total FROM orders ORDER BY created_at DESC LIMIT 6`),
+  ]);
+  const byStatus = { new: 0, shipped: 0, cancelled: 0 };
+  for (const r of orders.results) byStatus[r.status] = r.n;
+  // Reviews live in MongoDB; if it is unreachable the dashboard still loads.
+  let reviews = null;
+  try {
+    reviews = await reviewCounts(getEnv());
+  } catch {}
+  res.json({
+    orders: byStatus,
+    revenue: revenue.results[0].total,
+    paidOrders: revenue.results[0].n,
+    products: products.results[0],
+    customers: customers.results[0].n,
+    subscribers: subs.results[0].n,
+    unreadMessages: messages.results[0].n,
+    reviews,
+    recentOrders: recent.results,
+  });
+});
+
+router.get("/customers", async (req, res) => {
+  const { results } = await db()
+    .prepare(
+      `SELECT c.id, c.email, c.name, c.phone, c.city, c.country, c.created_at,
+              (SELECT COUNT(*) FROM orders o WHERE o.customer_id = c.id) AS order_count,
+              (SELECT COALESCE(SUM(total), 0) FROM orders o WHERE o.customer_id = c.id AND o.status != 'cancelled') AS spent
+       FROM customers c ORDER BY c.created_at DESC LIMIT 500`
+    )
+    .all();
+  res.json({ customers: results });
 });
 
 // ---------- Settings ----------

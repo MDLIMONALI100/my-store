@@ -116,7 +116,14 @@ for (const [route, r] of Object.entries(RESOURCES)) {
 
   router.get(`/${route}`, async (req, res) => {
     const { results } = await db().prepare(`SELECT * FROM ${r.table} ORDER BY ${r.order}`).all();
-    res.json({ items: results.map(present) });
+    const items = results.map(present);
+    if (r.table === "outfits") {
+      // How many products each outfit has, for the admin list.
+      const { results: counts } = await db().prepare(`SELECT outfit_id, COUNT(*) AS n FROM outfit_items GROUP BY outfit_id`).all();
+      const byId = new Map(counts.map((c) => [c.outfit_id, c.n]));
+      for (const o of items) o.piece_count = byId.get(o.id) || 0;
+    }
+    res.json({ items });
   });
 
   router.post(`/${route}`, async (req, res) => {

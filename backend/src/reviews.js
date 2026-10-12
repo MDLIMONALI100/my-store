@@ -114,3 +114,13 @@ export async function moderateReview(env, id, action) {
     };
   });
 }
+
+// Just the numbers (pending / approved), for the admin dashboard.
+export async function reviewCounts(env) {
+  return withMongo(env, async (db) => {
+    const rows = await db.collection("reviews").aggregate([{ $group: { _id: "$status", n: { $sum: 1 } } }]).toArray();
+    const out = { pending: 0, approved: 0 };
+    for (const r of rows) out[r._id] = r.n;
+    return out;
+  });
+}

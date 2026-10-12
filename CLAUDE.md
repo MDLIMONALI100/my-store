@@ -39,7 +39,10 @@ The live site is still the old Worker (`src/` + `public/`). A rebuild is in prog
 - Settings groups (`storefront`, `theme`, `viewer`) live in the `settings` table, defaults in `backend/src/lib/settings.js`.
 - Photos are never auto-deleted by the new admin (they can be shared by many products); `DELETE /api/admin/images/:id` refuses while a photo is in use.
 - Dev: `npm --prefix backend run dev` (API, :8788, shares local D1 state via `--persist-to ../.wrangler/state`) and `npm --prefix frontend run dev` (:3000). Local migrations: `npm --prefix backend run migrate:local`. Preview configs `api` and `frontend` are in `.claude/launch.json`.
-- Plan: Phase 3 catalog (200 products: leather jackets, denim jeans, boots), Phase 4 pages (home sections, shop, product, checkout page, menu pages, outfits), Phase 5 new admin in Next, Phase 6 outfit ideas + 3D 360 viewer, then deploy (OpenNext/vinext for Next on Workers; `wrangler deploy` for the API).
+- Done so far on the branch: Phase 1 design system (light, `frontend/app/globals.css` + `shop.css`), Phase 2 Express API, Phase 3 catalog (200 products via `scripts/catalog/{download,build,seed}.mjs`; generated photos in git-ignored `seed/catalog/`), Phase 4 storefront pages (home sections from `/api/home`, `/shop`, `/shop/[category]`, `/product/[id]`, `/checkout`, `/outfits`, content pages `/[slug]`, `/account`, `/wishlist`, search), customer accounts (migration 0007), Phase 5 admin at `/admin` (own login via cookie `sw_admin`, migration 0008; screens in `frontend/app/(admin)/admin/(panel)/`, kit in `frontend/components/admin/`).
+- Route groups: `app/(shop)/` has the storefront layout (header/footer/cart); `app/(admin)/admin/` has the admin layout. Root `app/layout.js` only does fonts + theme.
+- Settings/menus are cached 10 s by the storefront (`lib/site.js`); first view after that refreshes it.
+- Still to do: Phase 6 (outfit ideas polish + 3D 360 viewer, `Viewer360.js` is a stub, needs R2 for big .glb files), then deploy (OpenNext/vinext for Next on Workers; `wrangler deploy` for the API; apply migrations 0006-0008 with --remote; run catalog seed against the live API). Nothing from this branch is live yet.
 
 ## Workflow
 - Preview locally: `npm run dev` (http://localhost:8787). It uses a local D1 and the dev Mongo database, both holding test data.

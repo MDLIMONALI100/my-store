@@ -3,7 +3,7 @@
 //   Admin:   /api/admin/*   (HTTP Basic Auth, see lib/auth.js)
 import express from "express";
 import { httpServerHandler } from "cloudflare:node";
-import { requireAdmin } from "./lib/auth.js";
+import { adminAuthRoutes, requireAdmin } from "./lib/auth.js";
 import publicRoutes, { serveImage } from "./routes/public.js";
 import checkoutRoutes from "./routes/checkout.js";
 import accountRoutes from "./routes/account.js";
@@ -26,6 +26,7 @@ app.use("/api", (req, res, next) => {
 
 app.get("/images/:id", serveImage);
 
+app.use("/api/admin-auth", adminAuthRoutes);
 app.use("/api/admin", requireAdmin, adminProducts, adminOrders, adminContent, adminMisc);
 app.use("/api/account", accountRoutes);
 app.use("/api", publicRoutes, checkoutRoutes);

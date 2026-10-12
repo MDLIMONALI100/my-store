@@ -75,7 +75,8 @@ async function buildWhere(query, { admin }) {
 
 export async function listProducts(query, { admin = false } = {}) {
   const { clause, binds } = await buildWhere(query, { admin });
-  const sort = SORTS[query.sort] || "p.sort_order";
+  // The shop lists oldest first (keeps your chosen order); the admin shows the newest products first.
+  const sort = SORTS[query.sort] || (admin ? "p.hidden ASC, p.sort_order DESC" : "p.sort_order");
   const limit = Math.min(Math.max(int(query.limit, 24), 1), 200);
   const offset = Math.max(int(query.offset, 0), 0);
 
