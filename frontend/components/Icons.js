@@ -55,3 +55,47 @@ export const LockIcon = (p) => (
     <path d="M8 11V8a4 4 0 0 1 8 0v3" />
   </svg>
 );
+
+export const SearchIcon = (p) => (
+  <svg {...base} {...p}>
+    <circle cx="11" cy="11" r="6.5" />
+    <path d="m16 16 4.5 4.5" />
+  </svg>
+);
+export const UserIcon = (p) => (
+  <svg {...base} {...p}>
+    <circle cx="12" cy="8.5" r="3.8" />
+    <path d="M4.5 20c.8-3.6 3.9-5.5 7.5-5.5s6.7 1.9 7.5 5.5" />
+  </svg>
+);
+export const HeartIcon = ({ filled, ...p }) => (
+  <svg {...base} {...p} fill={filled ? "currentColor" : "none"}>
+    <path d="M12 20s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.4a4.3 4.3 0 0 1 7.5 2.4C19.5 15.4 12 20 12 20Z" />
+  </svg>
+);
+export const CheckIcon = (p) => (
+  <svg {...base} {...p}>
+    <path d="m5 12.5 4.5 4.5L19 7.5" />
+  </svg>
+);
+export const PlusIcon = (p) => (
+  <svg {...base} {...p}>
+    <path d="M12 5v14M5 12h14" />
+  </svg>
+);
+export const ChevronIcon = (p) => (
+  <svg {...base} {...p}>
+    <path d="m6 9 6 6 6-6" />
+  </svg>
+);
+export const FilterIcon = (p) => (
+  <svg {...base} {...p}>
+    <path d="M4 7h16M7 12h10M10 17h4" />
+  </svg>
+);
+export const ZoomIcon = (p) => (
+  <svg {...base} {...p}>
+    <circle cx="11" cy="11" r="6.5" />
+    <path d="m16 16 4.5 4.5M11 8.5v5M8.5 11h5" />
+  </svg>
+);

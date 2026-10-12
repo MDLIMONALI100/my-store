@@ -1,10 +1,16 @@
 import Link from "next/link";
-import { CATEGORIES, SITE } from "@/lib/helpers";
 import CartLink from "./CartLink";
 import SplitText from "./SplitText";
+import NewsletterForm from "./NewsletterForm";
 
-export default function Footer() {
-  const name = SITE.store_name;
+export default function Footer({ storefront, shopLinks, infoLinks }) {
+  const name = storefront.store_name;
+  const socials = [
+    ["Instagram", storefront.instagram_url],
+    ["Facebook", storefront.facebook_url],
+    ["TikTok", storefront.tiktok_url],
+  ].filter(([, url]) => url);
+
   return (
     <footer className="site-footer theme-dark">
       <div className="container">
@@ -13,34 +19,49 @@ export default function Footer() {
             Get in touch
             <br />
             with us
-            <p>Contact us and our team will be happy to answer all your questions.</p>
+            <p>Questions about an order, a fit or a product? Our team is happy to help.</p>
+            <Link href="/contact" className="link-under">
+              Contact us
+            </Link>
           </div>
-          <SplitText as="p" className="big display" text={"Built to be\nworn in."} />
+          <SplitText as="p" className="big display" text={storefront.footer_statement || "Built to be\nworn in."} />
         </div>
 
         <div className="footer-grid">
           <div>
             <span className="footer-brand">{name}</span>
-            <span>Leather jackets, denim and boots with attitude.</span>
+            <span>{storefront.footer_tagline}</span>
+            {socials.length > 0 && (
+              <span className="footer-socials">
+                {socials.map(([label, url]) => (
+                  <a key={label} href={url} target="_blank" rel="noopener noreferrer">
+                    {label}
+                  </a>
+                ))}
+              </span>
+            )}
           </div>
           <div>
             <h4>Shop</h4>
-            <Link href="/">All products</Link>
-            {CATEGORIES.map((c) => (
-              <Link key={c} href={`/?category=${encodeURIComponent(c)}`}>
-                {c}
+            {shopLinks.map((l) => (
+              <Link key={l.id} href={l.href}>
+                {l.label}
               </Link>
             ))}
           </div>
           <div>
-            <h4>Help</h4>
+            <h4>Info</h4>
+            {infoLinks.map((l) => (
+              <Link key={l.id} href={l.href}>
+                {l.label}
+              </Link>
+            ))}
             <CartLink>Your cart</CartLink>
-            <span>Free shipping over $50</span>
-            <span>No payment taken online</span>
+            <Link href="/account">My account</Link>
           </div>
           <div>
-            <h4>Info</h4>
-            <span>Photos: Unsplash</span>
+            <h4>Newsletter</h4>
+            <NewsletterForm />
           </div>
         </div>
 
@@ -48,7 +69,7 @@ export default function Footer() {
           <span>
             © {new Date().getFullYear()} {name}. All rights reserved.
           </span>
-          <span>Demo store</span>
+          <span>Demo store · photos from Unsplash</span>
         </div>
       </div>
     </footer>

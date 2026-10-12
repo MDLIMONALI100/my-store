@@ -1,26 +1,29 @@
 "use client";
+// Announcement bar + sticky header: menu on the left, logo in the middle, icons on the right.
+// The menu items and store name come from the admin (passed in by the layout).
 import Link from "next/link";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
-import { CATEGORIES, SITE } from "@/lib/helpers";
 import { useCart } from "./CartProvider";
+import { useWishlist } from "./WishlistProvider";
 import CartLink from "./CartLink";
-import { BagIcon, CloseIcon, MenuIcon } from "./Icons";
+import SearchOverlay from "./SearchOverlay";
+import { BagIcon, CloseIcon, HeartIcon, MenuIcon, SearchIcon, UserIcon } from "./Icons";
 
-const NAV = [["/", "Shop"], ...CATEGORIES.map((c) => [`/?category=${encodeURIComponent(c)}`, c])];
-
-// false while the server renders and during hydration, true afterwards. The cart
-// only exists in the browser, so the badge number waits for this.
+// false while the server renders and during hydration, true afterwards. The cart and
+// wishlist only exist in the browser, so their badge numbers wait for this.
 const noopSubscribe = () => () => {};
 const useHydrated = () => useSyncExternalStore(noopSubscribe, () => true, () => false);
 
-export default function Header() {
+export default function Header({ storeName, announcement, showAnnouncement, items }) {
   const pathname = usePathname();
   const search = useSearchParams().toString();
   const here = pathname + (search ? `?${search}` : "");
   const { count, bump } = useCart();
+  const wish = useWishlist();
   const hydrated = useHydrated();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
 
   // Page scroll is locked while the mobile menu is open; Esc closes it.
   useEffect(() => {
@@ -35,23 +38,24 @@ export default function Header() {
     };
   }, [menuOpen]);
 
-  const items = SITE.announcement.split("|").map((t) => t.trim()).filter(Boolean);
-  const repeat = Math.max(4, Math.ceil(12 / items.length));
+  const messages = (announcement || "").split("|").map((t) => t.trim()).filter(Boolean);
+  const repeat = Math.max(4, Math.ceil(12 / Math.max(messages.length, 1)));
+  const isCurrent = (href) => href === here || (href !== "/" && !href.includes("?") && pathname === href);
 
   const links = (onClick) =>
-    NAV.map(([href, label], i) => (
-      <Link key={href} href={href} aria-current={href === here ? "page" : undefined} onClick={onClick} style={{ "--i": i }}>
-        {label}
+    items.map((item, i) => (
+      <Link key={item.id} href={item.href} aria-current={isCurrent(item.href) ? "page" : undefined} onClick={onClick} style={{ "--i": i }}>
+        {item.label}
       </Link>
     ));
 
   return (
     <>
-      {items.length > 0 && (
+      {showAnnouncement && messages.length > 0 && (
         <div className="marquee" aria-hidden="true">
           <div className="marquee-track">
             {Array.from({ length: repeat }).flatMap((_, i) =>
-              items.flatMap((t, j) => [<span key={`${i}-${j}-t`}>{t}</span>, <span key={`${i}-${j}-s`}>—</span>])
+              messages.flatMap((t, j) => [<span key={`${i}-${j}-t`}>{t}</span>, <span key={`${i}-${j}-s`}>—</span>])
             )}
           </div>
         </div>
@@ -65,9 +69,19 @@ export default function Header() {
             {links()}
           </nav>
           <Link href="/" className="logo">
-            {SITE.store_name}
+            {storeName}
           </Link>
           <div className="header-actions">
+            <button type="button" className="icon-btn" aria-label="Search" onClick={() => setSearchOpen(true)}>
+              <SearchIcon />
+            </button>
+            <Link href="/account" className="icon-btn" aria-label="My account">
+              <UserIcon />
+            </Link>
+            <Link href="/wishlist" className="icon-btn icon-wish" aria-label="Wishlist">
+              <HeartIcon />
+              <span className="cart-count">{hydrated && wish.count > 0 ? wish.count : ""}</span>
+            </Link>
             <CartLink className="icon-btn cart-link" aria-haspopup="dialog" aria-label="Cart">
               <BagIcon />
               {/* key={bump} restarts the little pop animation when the count goes up */}
@@ -84,15 +98,22 @@ export default function Header() {
         <div className="panel" role="dialog" aria-modal="true" aria-label="Menu">
           <div className="panel-head">
             <span className="logo" style={{ justifySelf: "start", marginLeft: 12 }}>
-              {SITE.store_name}
+              {storeName}
             </span>
             <button type="button" className="icon-btn" aria-label="Close menu" onClick={() => setMenuOpen(false)}>
               <CloseIcon />
             </button>
           </div>
-          <nav aria-label="Mobile">{links(() => setMenuOpen(false))}</nav>
+          <nav aria-label="Mobile">
+            {links(() => setMenuOpen(false))}
+            <Link href="/account" onClick={() => setMenuOpen(false)} style={{ "--i": items.length }}>
+              My account
+            </Link>
+          </nav>
         </div>
       </div>
+
+      <SearchOverlay open={searchOpen} onClose={() => setSearchOpen(false)} />
     </>
   );
 }

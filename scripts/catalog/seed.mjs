@@ -77,7 +77,32 @@ if (stray.length) {
   console.log(`hid ${stray.length} older products`);
 }
 
-// ---------- 3. category pictures ----------
+// ---------- 3. outfits ----------
+// Six ready-made looks: one jacket, one pair of jeans and one pair of boots that go together.
+const find = (category, name, color) =>
+  products.find((p) => p.category === category && p.stock > 0 && !/women/i.test(p.name) && name.test(p.name) && color.test(p.color_name))?.id;
+const LOOKS = [
+  ["Midnight Rider", "All black, all attitude. A biker jacket, slim black denim and combat boots.", [["Leather Jackets", /biker|moto|rider/i, /black/i], ["Denim Jeans", /slim/i, /black/i], ["Boots", /combat/i, /black/i]]],
+  ["Cognac Classic", "Warm cognac leather over dark indigo denim and polished brown boots.", [["Leather Jackets", /racer/i, /cognac/i], ["Denim Jeans", /straight/i, /indigo|navy|dark/i], ["Boots", /chelsea/i, /cognac|chestnut|brown/i]]],
+  ["City Chelsea", "Easy city style: a black biker, mid-wash straight jeans and black Chelsea boots.", [["Leather Jackets", /biker/i, /black/i], ["Denim Jeans", /straight/i, /mid|blue/i], ["Boots", /chelsea/i, /black/i]]],
+  ["Western Weekend", "Brown leather, faded blue denim and cowboy boots for the weekend.", [["Leather Jackets", /trucker|utility|racer/i, /brown|cognac/i], ["Denim Jeans", /straight|relaxed/i, /faded|light|blue/i], ["Boots", /cowboy|western/i, /cognac|tan|brown/i]]],
+  ["Raw Edge", "Selvedge indigo, a distressed black biker and heavy engineer boots.", [["Leather Jackets", /distressed|biker/i, /black/i], ["Denim Jeans", /selvedge/i, /indigo/i], ["Boots", /engineer/i, /black/i]]],
+  ["Desert Drifter", "Soft suede and sandy tones: a suede jacket, light wash jeans and tan boots.", [["Leather Jackets", /suede/i, /./], ["Denim Jeans", /relaxed|straight/i, /light|sky/i], ["Boots", /./, /tan|wheat|honey|sand/i]]],
+];
+const { items: existingOutfits } = await call("/api/admin/outfits");
+for (const [name, description, parts] of LOOKS) {
+  const ids = parts.map(([c, n, col]) => find(c, n, col)).filter(Boolean);
+  if (ids.length < 3) {
+    console.log(`  outfit skipped (not enough matching products): ${name}`);
+    continue;
+  }
+  const have = existingOutfits.find((o) => o.name === name);
+  const outfit = have || (await call("/api/admin/outfits", json("POST", { name, description }))).item;
+  await call(`/api/admin/outfits/${outfit.id}/products`, json("PUT", { ids }));
+  console.log(`  outfit: ${name} (${ids.length} pieces)`);
+}
+
+// ---------- 4. category pictures ----------
 const slugOf = { "Leather Jackets": "leather-jackets", "Denim Jeans": "denim-jeans", Boots: "boots" };
 for (const [cat, file] of Object.entries(categoryFiles)) {
   await call(`/api/admin/categories/${slugOf[cat]}`, json("PUT", { image_id: uploaded[file] }));
