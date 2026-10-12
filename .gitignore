@@ -5,3 +5,6 @@ node_modules
 
 # generated catalog photos (rebuild with scripts/catalog)
 seed/catalog/
+
+# database backups (contain customer data)
+backups/

@@ -40,6 +40,20 @@
         "dev"
       ],
       "port": 8788
+    },
+    {
+      "name": "vinext-preview",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "--prefix",
+        "frontend",
+        "run",
+        "start:vinext",
+        "--",
+        "--port",
+        "4173"
+      ],
+      "port": 4173
     }
   ]
 }
