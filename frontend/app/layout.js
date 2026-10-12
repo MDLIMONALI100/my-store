@@ -3,6 +3,7 @@ import "./globals.css";
 import { CartProvider } from "@/components/CartProvider";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
+import CartDrawer from "@/components/CartDrawer";
 
 export const metadata = {
   title: "Streetwear · Leather Jackets",
@@ -29,6 +30,7 @@ export default function RootLayout({ children }) {
           </Suspense>
           {children}
           <Footer />
+          <CartDrawer />
         </CartProvider>
       </body>
     </html>

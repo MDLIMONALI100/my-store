@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { CATEGORIES, SITE } from "@/lib/helpers";
+import CartLink from "./CartLink";
 
 const NAV = [["/", "All jackets"], ...CATEGORIES.map((c) => [`/?category=${encodeURIComponent(c)}`, c])];
 
@@ -19,7 +20,7 @@ export default function Footer() {
           </div>
           <div>
             <h4>Help</h4>
-            <a href="#cart">Your cart</a>
+            <CartLink>Your cart</CartLink>
             <span>Free shipping over $50</span>
             <span>No payment taken online</span>
           </div>

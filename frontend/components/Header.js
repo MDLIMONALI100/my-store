@@ -1,16 +1,24 @@
 "use client";
 import Link from "next/link";
+import { useSyncExternalStore } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import { CATEGORIES, SITE } from "@/lib/helpers";
 import { useCart } from "./CartProvider";
+import CartLink from "./CartLink";
 
 const NAV = [["/", "Shop"], ...CATEGORIES.map((c) => [`/?category=${encodeURIComponent(c)}`, c])];
+
+// false while the server renders and during hydration, true afterwards. The cart
+// only exists in the browser, so the badge number waits for this.
+const noopSubscribe = () => () => {};
+const useHydrated = () => useSyncExternalStore(noopSubscribe, () => true, () => false);
 
 export default function Header() {
   const pathname = usePathname();
   const search = useSearchParams().toString();
   const here = pathname + (search ? `?${search}` : "");
-  const { count } = useCart();
+  const { count, bump } = useCart();
+  const hydrated = useHydrated();
 
   const items = SITE.announcement.split("|").map((t) => t.trim()).filter(Boolean);
   const repeat = Math.max(4, Math.ceil(12 / items.length));
@@ -39,10 +47,13 @@ export default function Header() {
               </Link>
             ))}
           </nav>
-          {/* Opens the slide-out cart in Step 2C */}
-          <a href="#cart" className="cart-link" aria-haspopup="dialog">
-            Cart <span className="cart-count">{count > 0 ? count : ""}</span>
-          </a>
+          <CartLink className="cart-link" aria-haspopup="dialog">
+            {/* key={bump} restarts the little pop animation when the count goes up */}
+            Cart{" "}
+            <span key={bump} className={`cart-count ${bump ? "bump" : ""}`}>
+              {hydrated && count > 0 ? count : ""}
+            </span>
+          </CartLink>
         </div>
       </header>
     </>

@@ -16,7 +16,6 @@ export default function ProductDetail({ p }) {
   const [size, setSize] = useState(sizes.length === 1 ? sizes[0] : "");
   const [sizeError, setSizeError] = useState("");
   const [qty, setQty] = useState("1");
-  const [added, setAdded] = useState(false);
 
   function onAdd(e) {
     if (sizes.length && !size) {
@@ -25,9 +24,7 @@ export default function ProductDetail({ p }) {
       return;
     }
     const n = Math.max(1, Math.min(10, parseInt(qty, 10) || 1));
-    addToCart(p.id, n, size); // Step 2C makes this open the slide-out cart
-    setAdded(true);
-    setTimeout(() => setAdded(false), 2200);
+    addToCart(p.id, n, size); // also opens the slide-out cart
   }
 
   return (
@@ -107,10 +104,6 @@ export default function ProductDetail({ p }) {
             <strong>No payment online.</strong> We&apos;ll contact you to arrange it.
           </li>
         </ul>
-      </div>
-      {/* Temporary confirmation until the cart drawer exists (Step 2C) */}
-      <div className={`toast ${added ? "show" : ""}`} role="status">
-        {added ? "Added to cart" : ""}
       </div>
     </section>
   );
