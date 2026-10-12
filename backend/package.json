@@ -1,0 +1,19 @@
+{
+  "name": "my-store-api",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev --port 8788 --persist-to ../.wrangler/state",
+    "deploy": "wrangler deploy",
+    "migrate:local": "wrangler d1 migrations apply my-store-db --local --persist-to ../.wrangler/state",
+    "migrate:remote": "wrangler d1 migrations apply my-store-db --remote"
+  },
+  "dependencies": {
+    "express": "^5.1.0",
+    "mongodb": "^7.7.0"
+  },
+  "devDependencies": {
+    "wrangler": "^4.149.0"
+  }
+}

@@ -7,7 +7,7 @@ import { serverApi } from "@/lib/api";
 // Server component: fetches the products, then draws the filter chips and the grid.
 // Chips are links (/?category=Biker) so the filter is just a URL, same as before.
 async function loadProducts() {
-  return (await serverApi("/api/products")).products;
+  return (await serverApi("/api/products?limit=200")).products;
 }
 
 export default async function ShopGrid({ active }) {

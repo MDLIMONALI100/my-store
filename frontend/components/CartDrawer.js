@@ -30,6 +30,7 @@ export default function CartDrawer() {
   const { open, view, highlight, openCount } = ui;
 
   const [catalog, setCatalog] = useState(null); // id -> product, refreshed each time the drawer opens
+  const [loadedFor, setLoadedFor] = useState(-1); // which opening (openCount) the catalog was last refreshed for
   const [loadFailed, setLoadFailed] = useState(false);
   const [draft, setDraft] = useState({}); // keeps typed details if the shopper goes back to the bag
   const [order, setOrder] = useState(null);
@@ -40,19 +41,28 @@ export default function CartDrawer() {
   const drawerRef = useRef(null);
   const formRef = useRef(null);
   const lastFocus = useRef(null);
+  const cartRef = useRef(cart);
+  useEffect(() => {
+    cartRef.current = cart; // must stay above the effect that loads the catalog
+  });
 
-  const loadCatalog = useCallback(
-    () =>
-      api("/api/products").then(({ products }) => {
-        setCatalog(Object.fromEntries(products.map((p) => [p.id, p])));
-        setLoadFailed(false);
-      }),
-    []
-  );
+  // Asks the API only for the products that are in the cart (not the whole shop).
+  const loadCatalog = useCallback(() => {
+    const ids = [...new Set(cartRef.current.map((l) => l.id))];
+    if (!ids.length) return Promise.resolve().then(() => setCatalog({}));
+    return api(`/api/products/by-ids?ids=${ids.map(encodeURIComponent).join(",")}`).then(({ products }) => {
+      setCatalog(Object.fromEntries(products.map((p) => [p.id, p])));
+      setLoadFailed(false);
+    });
+  }, []);
 
   // Fresh stock and prices every time the drawer opens.
   useEffect(() => {
-    if (open) loadCatalog().catch(() => setLoadFailed(true));
+    if (!open) return;
+    const n = openCount;
+    loadCatalog()
+      .then(() => setLoadedFor(n))
+      .catch(() => setLoadFailed(true));
   }, [open, openCount, loadCatalog]);
 
   // Links like /#cart (and the old /cart page) open the drawer on arrival.
@@ -86,9 +96,13 @@ export default function CartDrawer() {
     });
   }, [cart, catalog]);
 
+  // Only drop lines once the catalog has been refreshed for this opening, otherwise a
+  // product that was just added (and isn't in the old catalog yet) would be removed.
+  const fresh = loadedFor === openCount;
   useEffect(() => {
-    if (catalog && lines.length !== cart.length) saveCart(lines);
-  }, [catalog, lines, cart, saveCart]);
+    if (catalog && fresh && lines.length !== cart.length) saveCart(lines);
+  }, [catalog, fresh, lines, cart, saveCart]);
+  const stale = !fresh && cart.some((l) => !catalog?.[l.id]);
 
   const rememberDraft = useCallback(() => {
     if (view === "checkout" && formRef.current) setDraft(Object.fromEntries(new FormData(formRef.current)));
@@ -277,7 +291,7 @@ export default function CartDrawer() {
         Keep shopping
       </button>
     );
-  } else if (!catalog) {
+  } else if (!catalog || stale) {
     body = <p className="drawer-msg">Loading…</p>;
   } else if (shownView === "checkout") {
     body = (

@@ -31,6 +31,16 @@ A demo online store (no online payment) on Cloudflare Workers with static assets
 - `scripts/seed-jackets.mjs` + `seed/jackets/*.webp`: seeds the 16 jackets through the admin API. `seed/PHOTO_CREDITS.md` lists the Unsplash sources.
 - `wrangler.jsonc`: assets, `run_worker_first` for `/api/*`, `/admin*`, `/` and the storefront pages, D1 binding, observability.
 
+## Migration to Next.js + Express (branch `nextjs-migration`, NOT live yet)
+The live site is still the old Worker (`src/` + `public/`). A rebuild is in progress on the branch `nextjs-migration`; nothing from it is deployed until the owner approves a phase.
+- `frontend/`: Next.js (App Router, plain JS). Light editorial design (tokens at top of `frontend/app/globals.css`), Lenis smooth scroll, scroll/text reveal animations (`data-reveal`, `SplitText`). Components in `frontend/components/`. Browser calls to `/api/*` and `/images/*` are proxied to the API (`frontend/next.config.mjs`, env `API_URL`, default http://localhost:8788).
+- `backend/`: Express 5 running on a Cloudflare Worker (`my-store-api`, `httpServerHandler` from `cloudflare:node`, `nodejs_compat`). Same D1 database (`DB`) and MongoDB (reviews). Env/secrets via `import { env } from "cloudflare:workers"`. Public routes `backend/src/routes/`, admin routes (Basic Auth) `backend/src/admin/`. `.dev.vars` is a copy of the root one (git-ignored).
+- Migration `migrations/0006_storefront_v2.sql` adds categories, product extras (sale price, colour, tabs, badge, featured/new), product_images, menus, pages, home_sections, outfits, subscribers, contact_messages and starter content. Applied LOCALLY only; apply `--remote` before deploying.
+- Settings groups (`storefront`, `theme`, `viewer`) live in the `settings` table, defaults in `backend/src/lib/settings.js`.
+- Photos are never auto-deleted by the new admin (they can be shared by many products); `DELETE /api/admin/images/:id` refuses while a photo is in use.
+- Dev: `npm --prefix backend run dev` (API, :8788, shares local D1 state via `--persist-to ../.wrangler/state`) and `npm --prefix frontend run dev` (:3000). Local migrations: `npm --prefix backend run migrate:local`. Preview configs `api` and `frontend` are in `.claude/launch.json`.
+- Plan: Phase 3 catalog (200 products: leather jackets, denim jeans, boots), Phase 4 pages (home sections, shop, product, checkout page, menu pages, outfits), Phase 5 new admin in Next, Phase 6 outfit ideas + 3D 360 viewer, then deploy (OpenNext/vinext for Next on Workers; `wrangler deploy` for the API).
+
 ## Workflow
 - Preview locally: `npm run dev` (http://localhost:8787). It uses a local D1 and the dev Mongo database, both holding test data.
 - Schema change: add `migrations/000N_*.sql`, run `npx wrangler d1 migrations apply my-store-db --local`, then `--remote` before deploying.

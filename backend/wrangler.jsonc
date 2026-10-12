@@ -1,0 +1,18 @@
+{
+  "name": "my-store-api",
+  "main": "src/index.js",
+  "compatibility_date": "2026-10-01",
+  // Express needs Node.js APIs (and the MongoDB driver needs them too).
+  "compatibility_flags": ["nodejs_compat"],
+  // Same database as the old store, so products and orders carry over.
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "my-store-db",
+      "database_id": "be77e626-01be-413f-ad46-b763929d3520",
+      // Migrations live at the project root, shared with the old Worker.
+      "migrations_dir": "../migrations"
+    }
+  ],
+  "observability": { "enabled": true }
+}

@@ -1,6 +1,5 @@
-// Server-side fetch helper. TEMPORARY: talks to the old Worker; Step 5 points
-// this at the Express API instead (change the one line below).
-const API_ORIGIN = process.env.OLD_WORKER_URL || "http://localhost:8787";
+// Server-side fetch helper: talks straight to the Express API.
+const API_ORIGIN = process.env.API_URL || "http://localhost:8788";
 
 export async function serverApi(path) {
   const res = await fetch(`${API_ORIGIN}${path}`, { cache: "no-store" });
