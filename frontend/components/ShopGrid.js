@@ -1,16 +1,12 @@
 import Link from "next/link";
 import ProductCard from "./ProductCard";
 import { SITE } from "@/lib/helpers";
+import { serverApi } from "@/lib/api";
 
 // Server component: fetches the products, then draws the filter chips and the grid.
 // Chips are links (/?category=Biker) so the filter is just a URL, same as before.
 async function loadProducts() {
-  // TEMPORARY: reads from the old Worker. Step 5 points this at the Express API.
-  const res = await fetch(`${process.env.OLD_WORKER_URL || "http://localhost:8787"}/api/products`, {
-    cache: "no-store",
-  });
-  if (!res.ok) throw new Error(`Request failed (${res.status})`);
-  return (await res.json()).products;
+  return (await serverApi("/api/products")).products;
 }
 
 export default async function ShopGrid({ active }) {
