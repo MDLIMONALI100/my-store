@@ -355,3 +355,32 @@
 /* Product cards must be able to shrink to their column (long price + colour lines wrap instead). */
 .grid > *, .rail > *, .outfit-rail > *, .wish-grid > *, .outfit-grid > * { min-width: 0; }
 .card-footer { flex-wrap: wrap; gap: 2px 10px; }
+
+/* ---------- 360° outfit viewer ---------- */
+.viewer-section { padding: 96px 0; }
+.viewer-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 64px; align-items: center; }
+.viewer-copy h2 { font-size: clamp(2.2rem, 5vw, 4.2rem); letter-spacing: -0.04em; margin-bottom: 18px; }
+.viewer-copy > p { color: var(--muted); max-width: 420px; margin: 0 0 28px; }
+.viewer-outfits { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 26px; }
+.viewer-section .chip { color: var(--text); border-color: var(--border); }
+.viewer-section .chip[aria-pressed="true"] { background: var(--text); color: var(--bg); }
+.viewer-items { list-style: none; margin: 0 0 28px; padding: 0; max-width: 460px; }
+.viewer-items a { display: flex; justify-content: space-between; gap: 16px; padding: 12px 0; border-bottom: 1px solid var(--border); transition: opacity .2s; }
+.viewer-items a:hover { opacity: .7; }
+.viewer-items small { display: block; color: var(--muted); font-size: .76rem; }
+.viewer-total { display: flex; justify-content: space-between; padding: 14px 0 0; font-size: 1.1rem; }
+.viewer-stage { position: relative; }
+.viewer-canvas { position: relative; width: 100%; aspect-ratio: 4 / 5; background: radial-gradient(ellipse at 50% 70%, #34343a 0%, #1a1a1d 70%); cursor: grab; touch-action: pan-y; overflow: hidden; user-select: none; }
+.viewer-canvas:active { cursor: grabbing; }
+.viewer-canvas canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.viewer-status { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); font-size: .85rem; text-align: center; padding: 20px; }
+.viewer-controls { display: flex; align-items: center; gap: 16px; margin-top: 14px; }
+.viewer-hint { font-size: .7rem; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); white-space: nowrap; min-width: 120px; }
+.viewer-controls input[type="range"] { flex: 1; accent-color: var(--text); }
+.viewer-caption { margin: 10px 0 0; font-size: .8rem; color: var(--muted); }
+@media (max-width: 900px) {
+  .viewer-section { padding: 64px 0; }
+  .viewer-grid { grid-template-columns: 1fr; gap: 36px; }
+  .viewer-stage { order: -1; }
+  .viewer-canvas { aspect-ratio: 1 / 1.1; }
+}

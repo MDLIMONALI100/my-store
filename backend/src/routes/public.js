@@ -138,7 +138,10 @@ router.get("/home", async (req, res) => {
         if (s.type === "product_rail") data.products = await railProducts(data);
         if (s.type === "categories") data.items = await homeCategories();
         if (s.type === "outfits") data.items = await loadOutfits({ limit: Math.min(Number(data.limit) || 4, 12) });
-        if (s.type === "viewer360") data.viewer = await getSettings("viewer");
+        if (s.type === "viewer360") {
+          data.viewer = await getSettings("viewer");
+          data.outfits = await loadOutfits({ limit: 8 }); // the viewer lets shoppers switch between looks
+        }
       } catch (err) {
         console.error("home section", s.type, err);
         data.error = true; // one broken section never takes the whole page down
